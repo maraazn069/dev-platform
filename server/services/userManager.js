@@ -13,6 +13,7 @@ const {
   containerExists
 } = require('./dockerExec');
 const nginxManager = require('./nginxManager');
+const credentialSync = require('./credentialSync');
 
 const USERS_FILE = path.join(__dirname, '../data/users.json');
 const USER_DATA_BASE = '/opt/devplatform/data';
@@ -208,6 +209,13 @@ function provisionUser({ username, password, displayName, email }) {
   const r6 = nginxManager.ensureUserSubdomain(username);
   if (!r6.success) errors.push('nginx: ' + r6.message);
 
+  // 4b) pgAdmin user (synthetic email, password = pgPassword biar konsisten)
+  // Ini fire-and-forget; gagal != block provision (admin bisa repair nanti).
+  const pgAdminEmail = (email || '').includes('@') ? email : `${username}@netprem.local`;
+  credentialSync.createPgAdminUser({ email: pgAdminEmail, password: pgPassword, role: 'user' })
+    .then(r => { if (!r.ok && !r.skipped) console.warn(`[provisionUser] pgAdmin create failed for ${username}: ${r.stderr}`); })
+    .catch(e => console.warn(`[provisionUser] pgAdmin error for ${username}: ${e.message}`));
+
   // 5) Save to users.json
   // mustChangePassword=true → user dipaksa ganti password admin-set saat login pertama
   const newUser = {
@@ -225,6 +233,7 @@ function provisionUser({ username, password, displayName, email }) {
     ],
     mysqlPassword,
     pgPassword,
+    pgAdminEmail,
     mustChangePassword: true,
     createdAt: new Date().toISOString()
   };
@@ -427,7 +436,70 @@ function getCredentials(username) {
   return {
     mysqlPassword: u.mysqlPassword || null,
     pgPassword: u.pgPassword || null,
+    pgAdminEmail: u.pgAdminEmail || `${username}@netprem.local`,
     databases: u.databases || []
+  };
+}
+
+/**
+ * Recreate (in-place upgrade) container code-server user. Berguna untuk:
+ * - Fix 502 setelah image rebuild
+ * - Apply env/limit baru tanpa minta user re-login
+ * 
+ * Ambil PASSWORD env dari container existing (atau generate baru kalau gak ada),
+ * stop+rm container lama, run dengan image terbaru.
+ */
+function recreateContainer(username) {
+  const users = getUsers();
+  const u = users.find(x => x.username === username);
+  if (!u) return { success: false, message: 'User tidak ditemukan.' };
+  if (u.role === 'admin') return { success: false, message: 'Admin gak punya code-server container.' };
+
+  const container = `codeserver-${username}`;
+  let password = null;
+  let passwordSource = 'unknown';
+
+  // Coba ambil PASSWORD dari env container existing
+  if (containerExists(container)) {
+    const r = dockerCmd(['inspect', '--format', '{{range .Config.Env}}{{println .}}{{end}}', container], { timeout: 5000 });
+    if (r.success) {
+      const match = r.output.split('\n').find(l => l.startsWith('PASSWORD='));
+      if (match) {
+        password = match.substring('PASSWORD='.length);
+        passwordSource = 'preserved';
+      }
+    }
+    // CRITICAL: kalau rm gagal, jangan lanjut create — bisa silent false-positive.
+    const rm = dockerCmd(['rm', '-f', container], { timeout: 30000 });
+    if (!rm.success || containerExists(container)) {
+      return { success: false, message: 'Gagal hapus container lama: ' + (rm.error || rm.output || 'unknown') };
+    }
+  }
+
+  // Kalau gak bisa ambil password (container hilang), generate random baru
+  let newPasswordGenerated = false;
+  if (!password) {
+    password = randomPassword(20);
+    passwordSource = 'regenerated';
+    newPasswordGenerated = true;
+  }
+
+  const r = createCodeServerContainer(username, password);
+  if (!r.success) {
+    return { success: false, message: 'Gagal recreate: ' + (r.error || r.output || 'unknown') };
+  }
+  // 'already exists' di flow recreate = failure (rm seharusnya udah jalan)
+  if (r.output === 'already exists') {
+    return { success: false, message: 'Container masih ada setelah rm — recreate gagal.' };
+  }
+
+  // Refresh nginx (in case wildcard cert needed reloading)
+  try { reloadNginx(); } catch (_) {}
+
+  return {
+    success: true,
+    message: `Container '${container}' di-recreate (password ${passwordSource}).`,
+    newPassword: newPasswordGenerated ? password : null
   };
 }
 
@@ -438,6 +510,7 @@ module.exports = {
   createDatabase,
   dropDatabase,
   repairUserCredentials,
+  recreateContainer,
   getCredentials,
   safeDbName,
   isValidName

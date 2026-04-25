@@ -293,8 +293,21 @@ otomatis, dan hardening VPS.
 - `scripts/backup.sh` — pg_dumpall + mysqldump --all-databases + tar workspace
   + tar portal data + copy .env (chmod 600). Retention: 7 daily, 4 weekly (Minggu),
   6 monthly (tgl 1). Output: `/opt/devplatform/backups/{daily,weekly,monthly}/<TS>/`
-- `scripts/install-backup-cron.sh` — daftar cron 02:30 daily, pasang logrotate
-  untuk `/var/log/devplatform-backup.log` (weekly, 8 file, compress)
+- `scripts/backup-to-r2.sh` — push backup harian ke Cloudflare R2 (S3-compat).
+  Dump MySQL + PG + workspace + config + nginx + SSL → tar → upload ke
+  `s3://devplatform-backups/<hostname>/<timestamp>/`. Retention 14 hari + monthly anchors.
+  Pakai awscli + creds dari `.env` (R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET).
+- `scripts/restore-from-r2.sh` — disaster recovery: di VPS baru/reinstall, download
+  backup terakhir dari R2 → restore semua (SSL, config, nginx, workspace, DB) →
+  docker compose up -d → recreate-all-codeserver.sh. Bisa restore dari host lain
+  dengan `RESTORE_FROM_HOST=oldname`.
+- `scripts/install-backup-cron.sh` — daftar cron 02:00 daily ke `backup-to-r2.sh`
+  (sebelumnya: `backup.sh` lokal — sekarang ke R2 untuk DR).
+- `scripts/diagnose-502.sh` — debug 502 per user: cek container ada/jalan, network,
+  nginx config, healthcheck portal→container. Output clear dengan fix command.
+- `scripts/recreate-all-codeserver.sh` — in-place upgrade SEMUA container codeserver-*
+  pakai image baru, preserve env (PASSWORD, mounts, network, limits). Fix 502 tanpa
+  user re-login.
 - `scripts/harden-vps.sh` — fail2ban (jail SSH 4×/10m), unattended-upgrades
   (auto security patch), `/etc/docker/daemon.json` (log rotation, no-new-privileges,
   live-restore), sysctl (SYN flood, ICMP redirect off, IP spoof), SSH disable
@@ -314,6 +327,39 @@ otomatis, dan hardening VPS.
 - `DB_REMOTE_IPS=` — whitelist IP DB remote
 - `CODE_SERVER_MEM=2g`, `CODE_SERVER_CPUS=1.5`, `CODE_SERVER_PIDS=300`
 - `BACKUP_ROOT=/opt/devplatform/backups`
+- `R2_ACCOUNT_ID=`, `R2_ACCESS_KEY=`, `R2_SECRET_KEY=`, `R2_BUCKET=devplatform-backups`
+  — Cloudflare R2 credentials untuk backup-to-r2.sh + restore-from-r2.sh
+
+### UI Improvements (2026-04-25)
+- **Logo + favicon SVG** (`public/assets/favicon.svg`, `logo.svg`) — terminal-style
+  chevron icon, terpasang di semua HTML (admin/dashboard/login/change-password) +
+  endpoint launch (phpmyadmin/pgadmin landing). Login page tampil SVG inline.
+- **Tombol "🔧 Repair Container"** per user di admin UI (warna kuning #d29922).
+  Endpoint `POST /admin/users/recreate-container` → `userManager.recreateContainer()`:
+  preserve PASSWORD env dari container existing, stop+rm, run dengan image baru.
+  Kalau container hilang → generate password baru, ditampilin ke admin via alert.
+- **phpMyAdmin launch landing** (`/api/launch/phpmyadmin`) — sebelumnya auto-submit
+  POST yang di-block sama CSRF protection phpMyAdmin modern (stuck di loading).
+  Sekarang landing dengan kredensial display + copy buttons + "Buka phpMyAdmin"
+  link. User paste manual = 2 klik.
+- **pgAdmin auto-create user** — saat `provisionUser`, fire-and-forget call
+  `credentialSync.createPgAdminUser({email: <user>@netprem.local, password: pgPassword,
+  role: 'user'})` lewat `setup.py add-user` (fallback ke `update-password` kalau exists).
+  Email synthetic disimpan di users.json sebagai `pgAdminEmail`. Launch landing
+  pgAdmin sekarang display email pgAdmin + password (login pgAdmin → langsung bisa).
+
+### Reliability Hardening (post-architect-review, 2026-04-25)
+- **`recreateContainer()`**: kalau `docker rm -f` gagal atau container masih
+  exists setelah rm → return failure (sebelumnya silent false-positive). Selain
+  itu, kalau `createCodeServerContainer()` return `output==='already exists'`
+  di flow recreate → juga failure (rm seharusnya udah jalan).
+- **`backup-to-r2.sh`**: `set -euo pipefail`, `require_nonempty()` validator
+  per artefak, kritis kalau MySQL/PG dump empty → latest pointer TIDAK diupdate
+  (jadi restore-from-latest tidak akan ambil backup yg corrupt). Verify upload
+  via `aws s3 ls manifest.json` setelah push. Exit code 1 kalau critical fail.
+- **`restore-from-r2.sh`**: `set -euo pipefail`, fail-hard kalau `aws s3 sync`
+  error (sebelumnya silent), validate critical artefacts non-empty sebelum
+  restore, fail-hard kalau `mysql`/`psql` restore error (capture stderr ke log).
 
 ### Admin Account Setup
 - install-vps.sh prompt: ADMIN_USERNAME (default: admin) + ADMIN_PASSWORD (manual ketik, min 10 char, double-confirm) + ADMIN_EMAIL (opsional)

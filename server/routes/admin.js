@@ -102,6 +102,15 @@ router.post('/users/repair-db', requireAdminApi, (req, res) => {
   res.json(result);
 });
 
+// Recreate (in-place upgrade) container code-server user — fix 502 cepat tanpa SSH
+router.post('/users/recreate-container', requireAdminApi, (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.json({ success: false, message: 'Username wajib.' });
+  const result = userManager.recreateContainer(username);
+  audit.log('user.recreate_container', { target: username, success: result.success }, req);
+  res.json(result);
+});
+
 router.get('/users/:username/credentials', requireAdminApi, (req, res) => {
   const creds = userManager.getCredentials(req.params.username);
   if (!creds) return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });

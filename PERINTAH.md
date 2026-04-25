@@ -1134,6 +1134,105 @@ sudo gunzip -c /tmp/restore/mysql-all.sql.gz | sudo docker exec -i devplatform-m
 sudo tar -xzf /tmp/restore/workspace.tar.gz -C /opt/devplatform/
 ```
 
+### 🔧 Tombol "Repair Container" (Fix 502 Tanpa SSH)
+
+Per user di tabel admin sekarang ada tombol **🔧 Repair Container**. Klik kalau:
+- User tiba-tiba 502 di subdomain (container hilang/crash)
+- Habis upgrade image code-server (apply image baru ke container existing)
+- Container nyangkut/freeze
+
+Apa yang terjadi: server inspect container existing → ambil PASSWORD env → stop+rm → run baru pakai image terbaru. Password code-server dipertahankan, jadi user gak perlu re-login. Memakan ~5 detik.
+
+⚠️ Kalau container sudah ke-hapus total (gak bisa baca PASSWORD-nya), system generate password baru → ditampilkan di alert browser. Catat & kasih ke user.
+
+---
+
+## 1️⃣3️⃣D Backup ke Cloudflare R2 (Disaster Recovery)
+
+Tujuan: kalau VPS mati / pindah VPS / install ulang → 1 command langsung punya semua data lama.
+
+### Setup Sekali (5 menit)
+
+1. Login Cloudflare → R2 → **Create Bucket**: `devplatform-backups`
+2. R2 → **Manage R2 API Tokens** → Create Token
+   - Permissions: **Object Read & Write**
+   - Specify bucket: `devplatform-backups`
+   - Save: Access Key ID, Secret Access Key, Account ID
+3. Edit `/opt/devplatform/.env`, tambahkan:
+   ```
+   R2_ACCOUNT_ID=xxxxxxxxxxxx
+   R2_ACCESS_KEY=xxxxxxxxxxxx
+   R2_SECRET_KEY=xxxxxxxxxxxx
+   R2_BUCKET=devplatform-backups
+   ```
+4. Install awscli + test backup manual:
+   ```bash
+   sudo apt install -y awscli
+   sudo bash scripts/backup-to-r2.sh
+   ```
+5. Pasang cron (auto backup harian jam 2 pagi):
+   ```bash
+   sudo bash scripts/install-backup-cron.sh
+   ```
+
+### Yang Di-backup
+- MySQL semua database (gzipped sql)
+- PostgreSQL semua database (gzipped sql)
+- Workspace user (`/opt/devplatform/data/`, exclude `node_modules` dll)
+- Config (`users.json`, `.env`, `docker-compose.yml`, audit log)
+- Nginx site configs
+- SSL certs (`/etc/letsencrypt/`)
+
+Retention: simpan 14 hari terakhir + anchor tanggal 1 tiap bulan.
+
+### Restore di VPS Baru / Reinstall
+
+Di VPS baru (atau VPS lama habis reinstall):
+
+```bash
+# 1) Clone repo
+sudo git clone https://github.com/maraazn069/dev-platform /opt/devplatform
+cd /opt/devplatform
+
+# 2) Buat .env minimal yang isinya R2 credentials saja
+sudo cp .env.example .env
+sudo nano .env   # isi R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET
+
+# 3) Install awscli
+sudo apt install -y awscli docker.io docker-compose-plugin
+
+# 4) Restore (akan auto download backup terakhir, restore DB+workspace+config+SSL)
+sudo bash scripts/restore-from-r2.sh
+# Atau dari host name lain:
+RESTORE_FROM_HOST=potato-old sudo bash scripts/restore-from-r2.sh
+
+# 5) Restore akan otomatis: docker compose up -d + recreate semua container code-server
+# Selesai. Login portal: https://<DOMAIN>/
+```
+
+### Update Fitur Tanpa Kehilangan Data
+
+```bash
+cd /opt/devplatform
+sudo git pull origin main
+# Kalau ada update Dockerfile codeserver:
+sudo bash scripts/recreate-all-codeserver.sh
+# Restart portal aja kalau cuma server-side change:
+sudo docker compose restart portal
+```
+Data user (di `/opt/devplatform/data/` + database volumes) AMAN. Kalau ada doubt, backup manual dulu sebelum git pull:
+```bash
+sudo bash scripts/backup-to-r2.sh
+```
+
+### Diagnose 502 (Kalau Repair Container Gak Cukup)
+
+```bash
+sudo bash scripts/diagnose-502.sh test     # cek user spesifik
+sudo bash scripts/diagnose-502.sh --all    # cek semua user
+```
+Output ngasih tau: container ada/jalan, network bener, nginx ada config, dll.
+
 ### 🐳 Layanan & Container
 List semua container kritis (Portal, Nginx, Postgres, MySQL, pgAdmin, phpMyAdmin, FileBrowser) dengan status real-time + tombol **🔄 Restart** per service. Berguna kalau:
 - Nginx ngasih 502 → klik Restart Nginx

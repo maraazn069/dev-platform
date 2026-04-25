@@ -253,33 +253,69 @@ router.get('/launch/phpmyadmin', requireAuth, (req, res) => {
   const domain = process.env.DOMAIN || 'dev.example.com';
   const proto = process.env.PROTOCOL || 'http';
   const targetDb = req.query.db ? userManager.safeDbName(username, req.query.db) : `${username}_default`;
-  const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const phpUrl = `${proto}://mysql.${domain}/`;
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+  // Auto-submit di-block sama CSRF protection phpMyAdmin modern. Kita pake landing
+  // page dengan kredensial yg di-display + tombol "Buka phpMyAdmin" + auto-copy ke clipboard.
   const html = `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Membuka phpMyAdmin...</title>
+  <title>Buka phpMyAdmin</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <style>
-    body { font-family: system-ui; background:#0d1117; color:#c9d1d9;
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
-      height:100vh; margin:0; gap:14px; }
-    .spinner { width:40px; height:40px; border:3px solid #30363d; border-top-color:#1f6feb;
-      border-radius:50%; animation:spin .8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background:#0d1117; color:#c9d1d9; padding:32px; min-height:100vh; }
+    .card { max-width:680px; margin:0 auto; background:#161b22; border:1px solid #30363d; border-radius:12px; padding:28px; }
+    h2 { color:#f0f6fc; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+    .sub { color:#8b949e; margin-bottom:20px; font-size:.92rem; }
+    .step { background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px 18px; margin:10px 0; }
+    .step b { color:#58a6ff; }
+    .row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #21262d; font-family: 'SF Mono', 'Consolas', monospace; font-size:.9rem; }
+    .row:last-child { border-bottom:none; }
+    .key { color:#8b949e; font-weight:500; }
+    .val { color:#79c0ff; }
+    a.btn, button.btn { display:inline-block; background:#1f6feb; color:#fff; padding:12px 24px; border-radius:7px; text-decoration:none; font-weight:600; margin-top:16px; border:none; cursor:pointer; font-size:.95rem; }
+    a.btn:hover, button.btn:hover { background:#388bfd; }
+    .copy { cursor:pointer; color:#8b949e; font-size:.78rem; padding:4px 10px; border:1px solid #30363d; border-radius:4px; margin-left:8px; background:transparent; transition:.15s; }
+    .copy:hover { color:#58a6ff; border-color:#58a6ff; }
+    .copy.copied { color:#3fb950; border-color:#3fb950; }
+    .info { background:#0c2d6b; border:1px solid #1f6feb; color:#79c0ff; padding:10px 14px; border-radius:7px; font-size:.85rem; margin-top:14px; }
   </style>
 </head>
 <body>
-  <div class="spinner"></div>
-  <div>Membuka phpMyAdmin sebagai <strong>${escapeHtml(username)}</strong>...</div>
-  <form id="f" method="POST" action="${proto}://mysql.${domain}/index.php" style="display:none">
-    <input name="pma_username" value="${escapeHtml(username)}">
-    <input name="pma_password" value="${escapeHtml(creds.mysqlPassword)}">
-    <input name="server" value="1">
-    <input name="target" value="db_structure.php">
-    <input name="db" value="${escapeHtml(targetDb)}">
-  </form>
-  <script>document.getElementById('f').submit();</script>
+  <div class="card">
+    <h2>🐬 Buka phpMyAdmin (MySQL)</h2>
+    <div class="sub">Login otomatis di-block oleh phpMyAdmin (CSRF protection). Pakai langkah berikut — cuma butuh 2 klik.</div>
+
+    <div class="step">
+      <b>Langkah 1.</b> Klik tombol <b>Copy Username</b> dan <b>Copy Password</b> di bawah, lalu klik <b>Buka phpMyAdmin</b>.
+      <div class="row"><span class="key">Server</span><span class="val">devplatform-mysql</span></div>
+      <div class="row"><span class="key">Database</span><span class="val">${esc(targetDb)}</span></div>
+      <div class="row"><span class="key">Username</span><span class="val" id="pmaU">${esc(username)}</span><button class="copy" onclick="cp('pmaU',this)">Copy</button></div>
+      <div class="row"><span class="key">Password</span><span class="val" id="pmaP">${esc(creds.mysqlPassword)}</span><button class="copy" onclick="cp('pmaP',this)">Copy</button></div>
+    </div>
+
+    <div class="step">
+      <b>Langkah 2.</b> Di tab phpMyAdmin: paste username & password → Login. Setelah masuk, sidebar kiri akan menampilkan database <b>${esc(targetDb)}</b>.
+    </div>
+
+    <div class="info">💡 Tips: centang "Save credentials" di phpMyAdmin biar gak perlu paste tiap kali.</div>
+
+    <a class="btn" href="${esc(phpUrl)}" target="_blank" rel="noopener">🚀 Buka phpMyAdmin</a>
+  </div>
+
+  <script>
+    function cp(id, btn) {
+      const txt = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(txt).then(() => {
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      });
+    }
+  </script>
 </body>
 </html>`;
   audit.log('launch.phpmyadmin', { db: targetDb }, req);
@@ -297,6 +333,7 @@ router.get('/launch/pgadmin', requireAuth, (req, res) => {
   const proto = process.env.PROTOCOL || 'http';
   const pgadminUrl = `${proto}://pgadmin.${domain}`;
   const dbName = `${username}_default`;
+  const pgAdminEmail = creds.pgAdminEmail || `${username}@netprem.local`;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   const html = `<!DOCTYPE html>
@@ -325,33 +362,40 @@ router.get('/launch/pgadmin', requireAuth, (req, res) => {
 <body>
   <div class="card">
     <h2>🐘 Buka pgAdmin (PostgreSQL)</h2>
-    <p style="color:#8b949e">pgAdmin butuh login dulu, lalu kamu register koneksi ke database kamu sendiri.</p>
+    <p style="color:#8b949e">Login pgAdmin pakai akun pribadi kamu di bawah, lalu register koneksi ke database kamu.</p>
 
     <div class="step">
-      <b>Langkah 1.</b> Login ke pgAdmin pakai akun yang dikasih admin secara terpisah
-      (bukan di-display di sini demi keamanan). Kalau belum punya, hubungi admin platform.
+      <b>Langkah 1. Login pgAdmin</b> — pgAdmin minta <b>email</b> (bukan username). Kamu udah punya akun otomatis:
+      <div class="row"><span class="key">Email</span><span class="val" id="pgEmail">${esc(pgAdminEmail)}</span><span class="copy" onclick="copyOne('pgEmail',this)">Copy</span></div>
+      <div class="row"><span class="key">Password</span><span class="val" id="pgPw">${esc(creds.pgPassword)}</span><span class="copy" onclick="copyOne('pgPw',this)">Copy</span></div>
     </div>
 
     <div class="step">
-      <b>Langkah 2.</b> Setelah masuk, klik kanan <code>Servers</code> → <b>Register</b> → <b>Server...</b>
-    </div>
-
-    <div class="step">
-      <b>Langkah 3.</b> Tab <b>General</b> → Name: <code>Database Saya</code><br>
-      Tab <b>Connection</b> isi:
+      <b>Langkah 2. Register koneksi</b> — setelah login, klik kanan <code>Servers</code> → <b>Register</b> → <b>Server...</b>
+      <br>Tab <b>General</b> → Name: <code>Database Saya</code>
+      <br>Tab <b>Connection</b>:
       <div class="row"><span class="key">Host</span><span class="val">devplatform-postgres</span></div>
       <div class="row"><span class="key">Port</span><span class="val">5432</span></div>
-      <div class="row"><span class="key">Maintenance database</span><span class="val">${esc(dbName)}</span></div>
-      <div class="row"><span class="key">Username</span><span class="val">${esc(username)}</span></div>
-      <div class="row"><span class="key">Password</span><span class="val" id="pgpw">${esc(creds.pgPassword)}</span><span class="copy" onclick="navigator.clipboard.writeText(document.getElementById('pgpw').textContent)">Copy</span></div>
+      <div class="row"><span class="key">Maintenance DB</span><span class="val">${esc(dbName)}</span></div>
+      <div class="row"><span class="key">Username</span><span class="val" id="pgUser">${esc(username)}</span><span class="copy" onclick="copyOne('pgUser',this)">Copy</span></div>
+      <div class="row"><span class="key">Password</span><span class="val" id="pgConnPw">${esc(creds.pgPassword)}</span><span class="copy" onclick="copyOne('pgConnPw',this)">Copy</span></div>
       <div style="color:#8b949e;font-size:.8rem;margin-top:6px;">✓ Centang "Save password" supaya tidak diminta lagi.</div>
     </div>
 
-    <div class="warn">⚠️ Tip: kalau koneksi remote butuh akses dari laptop, pakai psql/DBeaver dengan
-    info di tab "Akses Remote" di dashboard — lebih aman daripada pakai web pgAdmin.</div>
+    <div class="warn">⚠️ Kalau pgAdmin nolak email kamu = akun belum di-create. Minta admin tekan tombol "Repair pgAdmin User" di panel admin.</div>
 
     <a class="btn" href="${esc(pgadminUrl)}" target="_blank">🚀 Buka pgAdmin Sekarang</a>
   </div>
+  <script>
+    function copyOne(id, btn) {
+      const txt = document.getElementById(id).textContent;
+      navigator.clipboard.writeText(txt).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+      });
+    }
+  </script>
 </body>
 </html>`;
   audit.log('launch.pgadmin', {}, req);

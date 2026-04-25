@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Dev Platform</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; }
@@ -781,6 +782,7 @@
             <button class="action-btn" onclick="openResetPw('${u.username}')">🔑</button>
             <button class="action-btn" onclick="viewCreds('${u.username}')">🐘 DB</button>
             ${!u.hasDbCredentials ? `<button class="action-btn" style="border-color:#f0883e;color:#f0883e;" onclick="repairDb('${u.username}')">⚙️ Repair DB</button>` : ''}
+            <button class="action-btn" style="border-color:#d29922;color:#d29922;" onclick="recreateContainer('${u.username}')" title="Recreate container code-server (fix 502 / apply image baru)">🔧 Repair Container</button>
             <button class="action-btn danger" onclick="removeUser('${u.username}')">Hapus</button>
           </td>
         </tr>`;
@@ -857,6 +859,27 @@
       alertEl.textContent = data.message;
       if (data.success) {
         setTimeout(() => { closeModal('removeUserModal'); loadUsers(); loadAudit(); }, 1200);
+      }
+    }
+
+    async function recreateContainer(username) {
+      if (!confirm(`Recreate container codeserver-${username}?\n\nIni akan stop+rm container lama, lalu run baru pakai image terbaru. PASSWORD code-server di-preserve. Memakan ~5 detik.`)) return;
+      try {
+        const res = await csrfFetch('/admin/users/recreate-container', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (data.success) {
+          let msg = data.message;
+          if (data.newPassword) msg += `\n\nPassword baru di-generate:\n${data.newPassword}\n\n(SIMPAN! Kasih ke user — password lama gak kepake lagi.)`;
+          alert(msg);
+          loadUsers();
+        } else {
+          alert('Gagal: ' + (data.message || 'unknown'));
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
       }
     }
 

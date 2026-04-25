@@ -86,6 +86,44 @@ async function syncToPgAdmin({ email, password }) {
   return result;
 }
 
+/**
+ * Create user pgAdmin baru (atau update password kalau udah ada).
+ * pgAdmin minta EMAIL untuk login (bukan username), jadi kita pakai synthetic email.
+ * Tries `add-user` (idempotent gak — kalau exists, fall back ke update-password).
+ */
+async function createPgAdminUser({ email, password, role }) {
+  if (!email || !password) return { ok: false, stderr: 'email/password kosong' };
+  if (!fs.existsSync('/var/run/docker.sock')) return { ok: true, skipped: true };
+
+  const roleArg = role === 'admin' ? '--admin' : '--nonadmin';
+
+  // pgAdmin v6+ punya `setup.py add-user`. Cek dulu apakah subcommand ada.
+  const tryAdd = await execAsync(
+    `docker exec ${PGADMIN_CONTAINER} /venv/bin/python /pgadmin4/setup.py add-user --email ${shellEscape(email)} --password ${shellEscape(password)} ${roleArg}`,
+    25000
+  );
+  if (tryAdd.ok) return { ok: true, action: 'created', email };
+
+  // Kalau add-user gak ada / error karena duplicate, fall back ke update-password
+  if (/already exists|duplicate/i.test(tryAdd.stderr) || /already exists|duplicate/i.test(tryAdd.stdout)) {
+    const upd = await syncToPgAdmin({ email, password });
+    return upd.ok ? { ok: true, action: 'updated', email } : { ok: false, stderr: upd.stderr };
+  }
+
+  // Fallback ke versi non-venv path
+  const tryAdd2 = await execAsync(
+    `docker exec ${PGADMIN_CONTAINER} python /pgadmin4/setup.py add-user --email ${shellEscape(email)} --password ${shellEscape(password)} ${roleArg}`,
+    25000
+  );
+  if (tryAdd2.ok) return { ok: true, action: 'created', email };
+  if (/already exists|duplicate/i.test(tryAdd2.stderr)) {
+    const upd = await syncToPgAdmin({ email, password });
+    return upd.ok ? { ok: true, action: 'updated', email } : { ok: false, stderr: upd.stderr };
+  }
+
+  return { ok: false, stderr: tryAdd2.stderr || tryAdd.stderr || 'pgAdmin add-user failed' };
+}
+
 function updateEnvFile(updates) {
   if (!fs.existsSync(ENV_FILE)) {
     return { ok: false, stderr: '.env tidak di-mount ke portal container — skip update env' };
@@ -139,4 +177,4 @@ async function syncAdminPassword({ username, email, password }) {
   return results;
 }
 
-module.exports = { syncAdminPassword };
+module.exports = { syncAdminPassword, createPgAdminUser, syncToPgAdmin };
