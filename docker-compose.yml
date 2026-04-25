@@ -202,7 +202,11 @@ services:
   # ---- pgAdmin: Web UI lengkap untuk PostgreSQL ----
   # Akses: https://pgadmin.dev.domainmu.com
   pgadmin:
-    image: dpage/pgadmin4:latest
+    # Pin v8.14 — versi :latest (v9+) ganti CLI ke pakai `typer` module yg gak
+    # ada di venv default → setup.py add-user/update-password gagal dgn:
+    #   ModuleNotFoundError: No module named 'typer'
+    # v8.14 (Jan 2025) masih pakai CLI argparse lama yg kompatibel dgn portal.
+    image: dpage/pgadmin4:8.14
     container_name: devplatform-pgadmin
     restart: unless-stopped
     expose:
