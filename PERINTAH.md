@@ -201,6 +201,26 @@ Setelah reinstall:
 
 ---
 
+### 🆘 Opsi CSP-FIX — Tombol di Admin/Dashboard tidak bisa diklik (Browser Console: CSP violation)
+Kalau tombol "Ganti Password", "Keluar", "Tambah User", "Refresh", dll **tidak ada
+respon** saat diklik, dan di DevTools Console muncul:
+```
+Executing inline event handler violates the following Content Security Policy
+directive 'script-src-attr 'none''.
+```
+Itu karena helmet CSP terlalu ketat (block semua `onclick=` inline). Fix sudah ada
+di server/index.js terbaru (allow `'unsafe-hashes'`). Update VPS:
+```bash
+cd ~/dev-platform
+git pull origin main
+sudo docker compose build portal
+sudo docker compose up -d portal
+sudo docker logs devplatform-portal --tail 10
+# Refresh browser dengan Ctrl+Shift+R supaya cache CSP lama hilang
+```
+
+---
+
 ### 🆘 Opsi nginx-FIX — nginx-proxy stuck "Restarting" / browser ERR_CONNECTION_REFUSED
 Kalau install sukses tapi `dev.netprem.org` browser nya **ERR_CONNECTION_REFUSED**,
 biasanya nginx-proxy crash di startup karena coba resolve hostname container yg

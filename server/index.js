@@ -25,35 +25,37 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 if (!fs.existsSync(USERS_FILE)) {
   const bcrypt = require('bcryptjs');
+  // Admin password & username di-set dari .env (install-vps.sh nanya manual).
+  // Kalau .env tidak ada (mode dev di Replit), pakai default 'admin/admin123'
+  // dengan force-change agar tidak bocor.
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  const adminEmail = process.env.ADMIN_EMAIL || '';
+  const adminFromEnv = !!process.env.ADMIN_PASSWORD;
+
   const defaultUsers = [
     {
       id: 'admin-001',
-      username: 'admin',
-      email: '',
-      password: bcrypt.hashSync('admin123', 10),
+      username: adminUsername,
+      email: adminEmail,
+      password: bcrypt.hashSync(adminPassword, 10),
       role: 'admin',
       displayName: 'Administrator',
       port: null,
       projects: [],
-      mustChangePassword: true,
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 'user-001',
-      username: 'user1',
-      email: '',
-      password: bcrypt.hashSync('user1234', 10),
-      role: 'user',
-      displayName: 'User Pertama',
-      port: 8081,
-      projects: ['default', 'belajar-python', 'belajar-web'],
-      mustChangePassword: true,
+      // Kalau admin set password manual via .env → tidak perlu force-change
+      // Kalau pakai default 'admin123' → wajib ganti
+      mustChangePassword: !adminFromEnv,
+      passwordChangedAt: adminFromEnv ? new Date().toISOString() : undefined,
       createdAt: new Date().toISOString()
     }
   ];
   fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
-  console.log('Default users created: admin / admin123 | user1 / user1234');
-  console.log('NOTE: Both default users HARUS ganti password saat login pertama.');
+  if (adminFromEnv) {
+    console.log(`Admin user created: ${adminUsername} (password dari .env, tidak force-change)`);
+  } else {
+    console.log('Default admin created: admin / admin123 — WAJIB ganti password saat login pertama.');
+  }
 }
 
 // Migration: untuk install lama yang belum punya mustChangePassword. Kalau user
@@ -84,9 +86,11 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       "default-src": ["'self'"],
-      // Inline styles & scripts diperbolehkan karena dashboard pakai inline (perubahan
-      // besar untuk pisah file = scope lain). Kalau mau lebih ketat, pindah ke external file.
+      // Inline styles & scripts diperbolehkan karena dashboard/admin pakai inline.
+      // 'unsafe-hashes' diperlukan untuk inline event handlers (onclick, oninput, dll)
+      // yang dipakai di admin.html, dashboard.html, change-password-required.html.
       "script-src": ["'self'", "'unsafe-inline'"],
+      "script-src-attr": ["'self'", "'unsafe-inline'", "'unsafe-hashes'"],
       "style-src": ["'self'", "'unsafe-inline'"],
       "img-src": ["'self'", "data:", "https:"],
       "connect-src": ["'self'"],

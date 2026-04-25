@@ -69,6 +69,40 @@ read -p "$(echo -e ${YELLOW})Password pgAdmin (Enter untuk auto-generate): $(ech
 if [ -z "$PGADMIN_PASSWORD" ]; then PGADMIN_PASSWORD=$(openssl rand -base64 16); fi
 
 echo ""
+echo -e "${BOLD}Akun Admin Portal${NC}"
+echo -e "${YELLOW}Akun ini untuk login ke https://DOMAIN/admin (kelola user, project, dll)${NC}"
+read -p "$(echo -e ${YELLOW})Username admin portal (Enter untuk 'admin'): $(echo -e ${NC})" ADMIN_USERNAME
+if [ -z "$ADMIN_USERNAME" ]; then ADMIN_USERNAME="admin"; fi
+
+while true; do
+  read -s -p "$(echo -e ${YELLOW})Password admin portal (min 10 karakter, ketik manual): $(echo -e ${NC})" ADMIN_PASSWORD
+  echo ""
+  if [ -z "$ADMIN_PASSWORD" ]; then
+    ADMIN_PASSWORD=$(openssl rand -base64 14)
+    echo -e "${GREEN}✓ Auto-generate password admin: ${YELLOW}$ADMIN_PASSWORD${NC}"
+    echo -e "${RED}  CATAT BAIK-BAIK PASSWORD INI!${NC}"
+    break
+  fi
+  # Bersihkan \r dari Windows paste
+  ADMIN_PASSWORD=$(echo "$ADMIN_PASSWORD" | tr -d '\r')
+  if [ ${#ADMIN_PASSWORD} -lt 10 ]; then
+    echo -e "${RED}⚠ Password kependekan (${#ADMIN_PASSWORD} karakter). Minimal 10. Ulangi.${NC}"
+    continue
+  fi
+  read -s -p "$(echo -e ${YELLOW})Ulangi password admin: $(echo -e ${NC})" ADMIN_PASSWORD2
+  echo ""
+  ADMIN_PASSWORD2=$(echo "$ADMIN_PASSWORD2" | tr -d '\r')
+  if [ "$ADMIN_PASSWORD" != "$ADMIN_PASSWORD2" ]; then
+    echo -e "${RED}⚠ Password tidak cocok. Ulangi.${NC}"
+    continue
+  fi
+  break
+done
+
+read -p "$(echo -e ${YELLOW})Email admin portal (Enter untuk skip): $(echo -e ${NC})" ADMIN_EMAIL
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+
+echo ""
 echo -e "${BOLD}Akses Remote Database${NC}"
 echo -e "${YELLOW}Daftarkan IP publik laptop kamu untuk konek MySQL/PostgreSQL via DBeaver/Workbench."
 echo -e "Cek IP publik kamu: ${BOLD}curl ifconfig.me${NC} (jalankan di laptop kamu, bukan VPS!)"
@@ -258,6 +292,11 @@ MYSQL_PASSWORD=$MYSQL_PASS
 PGADMIN_EMAIL=$PGADMIN_EMAIL
 PGADMIN_PASSWORD=$PGADMIN_PASSWORD
 
+# Akun admin portal (di-set saat install, TIDAK force-change kalau diisi manual)
+ADMIN_USERNAME=$ADMIN_USERNAME
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+ADMIN_EMAIL=$ADMIN_EMAIL
+
 # Direktori data & backup
 DATA_DIR=/opt/devplatform/data
 BACKUP_ROOT=/opt/devplatform/backups
@@ -390,7 +429,7 @@ echo -e "  Via domain  : ${CYAN}http://$DOMAIN${NC}"
 echo -e "  Via IP      : ${CYAN}http://$SERVER_IP${NC} (redirect ke domain)"
 echo ""
 echo -e "${BOLD}Login Default:${NC}"
-echo -e "  Admin  : username ${YELLOW}admin${NC}  / password ${YELLOW}admin123${NC}"
+echo -e "  Admin  : username ${YELLOW}$ADMIN_USERNAME${NC}  / password ${YELLOW}(yang kakak set saat install)${NC}"
 echo -e "  User 1 : username ${YELLOW}user1${NC}  / password ${YELLOW}user1234${NC}"
 echo ""
 echo -e "${BOLD}Kredensial Database (simpan baik-baik!):${NC}"

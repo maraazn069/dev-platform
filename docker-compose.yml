@@ -37,6 +37,9 @@ services:
       - CODE_SERVER_CPUS=${CODE_SERVER_CPUS:-1.5}
       - CODE_SERVER_PIDS=${CODE_SERVER_PIDS:-300}
       - DB_REMOTE_IPS=${DB_REMOTE_IPS:-}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
     volumes:
       - ./server/data:/app/server/data
       - /var/run/docker.sock:/var/run/docker.sock

@@ -309,6 +309,20 @@ otomatis, dan hardening VPS.
 - `CODE_SERVER_MEM=2g`, `CODE_SERVER_CPUS=1.5`, `CODE_SERVER_PIDS=300`
 - `BACKUP_ROOT=/opt/devplatform/backups`
 
+### Admin Account Setup
+- install-vps.sh prompt: ADMIN_USERNAME (default: admin) + ADMIN_PASSWORD (manual ketik, min 10 char, double-confirm) + ADMIN_EMAIL (opsional)
+- Tersimpan di .env sebagai ADMIN_USERNAME / ADMIN_PASSWORD / ADMIN_EMAIL
+- docker-compose passes via environment ke portal container
+- server/index.js: kalau process.env.ADMIN_PASSWORD set saat first-boot users.json
+  belum ada → buat admin pakai password tsb, set passwordChangedAt=now,
+  mustChangePassword=false. Kalau env tidak ada → fallback admin/admin123 + force-change
+- user1 default sudah dihapus dari first-boot (admin tambah user manual via panel)
+
+### CSP Headers (Helmet)
+- script-src: 'self' 'unsafe-inline'
+- script-src-attr: 'self' 'unsafe-inline' 'unsafe-hashes' ← WAJIB untuk onclick inline
+- Tanpa 'unsafe-hashes', semua tombol HTML (admin.html, dashboard.html, change-password-required.html) tidak bisa diklik
+
 ### Supported OS
 - Ubuntu 22.04 LTS (Jammy) & Ubuntu 24.04 LTS (Noble) — keduanya tested
 - Docker dipasang dari repo resmi docker.com via install-vps.sh (sama di keduanya)
