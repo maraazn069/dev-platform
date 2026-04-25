@@ -2,27 +2,13 @@
   {
     "id": "admin-001",
     "username": "admin",
-    "password": "$2b$10$207Q748x4rnAEdoPsd8t0e4DY.l8MxT5FE.7yoNmkZYzCj13L4oS.",
+    "email": "",
+    "password": "$2b$10$L2mqhca3vSHp9TMBZfb49uxumBjpd2iox4DeZP2Fw9izTTc1dLwEK",
     "role": "admin",
     "displayName": "Administrator",
     "port": null,
     "projects": [],
-    "createdAt": "2026-04-25T02:18:09.980Z",
-    "mustChangePassword": true
-  },
-  {
-    "id": "user-001",
-    "username": "user1",
-    "password": "$2b$10$9M5uGeuvK5Qeu2sDe/lP/u4UB.JEaQH4AKwMamysgraTOy5XLyyu6",
-    "role": "user",
-    "displayName": "User Pertama",
-    "port": 8081,
-    "projects": [
-      "default",
-      "belajar-python",
-      "belajar-web"
-    ],
-    "createdAt": "2026-04-25T02:18:10.060Z",
-    "mustChangePassword": true
+    "mustChangePassword": true,
+    "createdAt": "2026-04-25T20:58:59.212Z"
   }
 ]

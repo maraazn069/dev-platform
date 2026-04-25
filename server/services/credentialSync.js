@@ -7,6 +7,25 @@ const FILEBROWSER_CONTAINER = 'devplatform-filebrowser';
 const FILEBROWSER_IMAGE = 'filebrowser/filebrowser:s6';
 const PGADMIN_CONTAINER = 'devplatform-pgadmin';
 
+// pgAdmin sync auto-disable kalau image punya issue (typer/argparse migration di v9+).
+// Ditandai true setelah deteksi pertama → call subsequent jadi no-op silent.
+// User bisa juga set PGADMIN_SYNC=false di .env untuk skip dari awal.
+let pgAdminDisabled = (process.env.PGADMIN_SYNC || '').toLowerCase() === 'false';
+let pgAdminWarnedOnce = false;
+function isPgAdminUnsupportedError(stderr) {
+  if (!stderr) return false;
+  return /No module named ['"]?typer['"]?|ModuleNotFoundError/i.test(stderr);
+}
+function maybeDisablePgAdmin(stderr) {
+  if (isPgAdminUnsupportedError(stderr) && !pgAdminDisabled) {
+    pgAdminDisabled = true;
+    if (!pgAdminWarnedOnce) {
+      console.warn('[credentialSync] pgAdmin sync DISABLED untuk session ini — image pgAdmin tidak compatible (CLI typer migration). User tetap bisa login pgAdmin manual via UI dgn admin creds dari .env. Set PGADMIN_SYNC=false di .env biar pesan ini gak muncul lagi.');
+      pgAdminWarnedOnce = true;
+    }
+  }
+}
+
 async function getFileBrowserVolumeName() {
   const result = await execAsync(
     `docker inspect ${FILEBROWSER_CONTAINER} --format '{{range .Mounts}}{{if eq .Destination "/database"}}{{.Name}}{{end}}{{end}}'`,
@@ -67,6 +86,7 @@ async function syncToFileBrowser({ username, password }) {
 }
 
 async function syncToPgAdmin({ email, password }) {
+  if (pgAdminDisabled) return { ok: true, skipped: true, stderr: 'pgAdmin sync disabled' };
   if (!email) return { ok: false, stderr: 'pgAdmin sync skipped: email kosong' };
   const cmd = [
     `docker exec ${PGADMIN_CONTAINER}`,
@@ -76,11 +96,14 @@ async function syncToPgAdmin({ email, password }) {
   ].join(' ');
   const result = await execAsync(cmd, 25000);
   if (!result.ok) {
+    maybeDisablePgAdmin(result.stderr);
+    if (pgAdminDisabled) return { ok: true, skipped: true, stderr: 'pgAdmin sync auto-disabled' };
     // Fallback: try without /venv/bin/python prefix (older images)
     const fallback = await execAsync(
       `docker exec ${PGADMIN_CONTAINER} python /pgadmin4/setup.py update-password --user ${shellEscape(email)} --password ${shellEscape(password)}`,
       25000
     );
+    maybeDisablePgAdmin(fallback.stderr);
     return fallback;
   }
   return result;
@@ -92,6 +115,7 @@ async function syncToPgAdmin({ email, password }) {
  * Tries `add-user` (idempotent gak — kalau exists, fall back ke update-password).
  */
 async function createPgAdminUser({ email, password, role }) {
+  if (pgAdminDisabled) return { ok: true, skipped: true };
   if (!email || !password) return { ok: false, stderr: 'email/password kosong' };
   if (!fs.existsSync('/var/run/docker.sock')) return { ok: true, skipped: true };
 
@@ -103,6 +127,8 @@ async function createPgAdminUser({ email, password, role }) {
     25000
   );
   if (tryAdd.ok) return { ok: true, action: 'created', email };
+  maybeDisablePgAdmin(tryAdd.stderr);
+  if (pgAdminDisabled) return { ok: true, skipped: true };
 
   // Kalau add-user gak ada / error karena duplicate, fall back ke update-password
   if (/already exists|duplicate/i.test(tryAdd.stderr) || /already exists|duplicate/i.test(tryAdd.stdout)) {
@@ -116,6 +142,8 @@ async function createPgAdminUser({ email, password, role }) {
     25000
   );
   if (tryAdd2.ok) return { ok: true, action: 'created', email };
+  maybeDisablePgAdmin(tryAdd2.stderr);
+  if (pgAdminDisabled) return { ok: true, skipped: true };
   if (/already exists|duplicate/i.test(tryAdd2.stderr)) {
     const upd = await syncToPgAdmin({ email, password });
     return upd.ok ? { ok: true, action: 'updated', email } : { ok: false, stderr: upd.stderr };
