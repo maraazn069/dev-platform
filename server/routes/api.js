@@ -125,7 +125,7 @@ router.get('/projects/:username', requireAuth, (req, res) => {
   const domain = process.env.DOMAIN || 'dev.domainmu.com';
   const projects = (user.projects || ['default']).map(p => ({
     name: p,
-    url: `https://${username}.${domain}/?folder=/config/projects/${p}`,
+    url: `http://${username}.${domain}/?folder=/config/projects/${p}`,
     localPort: `http://localhost:${user.port}/?folder=/config/projects/${p}`
   }));
 
