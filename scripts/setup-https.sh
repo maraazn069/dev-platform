@@ -83,8 +83,9 @@ certbot certonly \
 echo -e "${GREEN}✓ Sertifikat wildcard berhasil: $DOMAIN dan *.$DOMAIN${NC}"
 
 # Generate nginx.conf dengan HTTPS + wildcard
+# Pakai quoted heredoc + sed agar tidak ada bash expansion yang merusak config
 echo -e "${CYAN}Update konfigurasi Nginx untuk HTTPS...${NC}"
-cat > "$PROJECT_DIR/nginx/nginx.conf" << NGINXEOF
+cat > "$PROJECT_DIR/nginx/nginx.conf" << 'NGINXEOF'
 events {
     worker_connections 1024;
 }
@@ -92,20 +93,18 @@ events {
 http {
     resolver 127.0.0.11 valid=30s ipv6=off;
 
-    # ---- Redirect semua HTTP → HTTPS ----
     server {
         listen 80;
-        server_name $DOMAIN *.$DOMAIN;
-        return 301 https://\$host\$request_uri;
+        server_name __DOMAIN__ *.__DOMAIN__;
+        return 301 https://$host$request_uri;
     }
 
-    # ---- Portal utama (HTTPS) ----
     server {
         listen 443 ssl;
-        server_name $DOMAIN;
+        server_name __DOMAIN__;
 
-        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_prefer_server_ciphers on;
 
@@ -113,46 +112,44 @@ http {
 
         location / {
             proxy_pass http://devplatform-portal:3000;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
             proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_read_timeout 60s;
         }
     }
 
-    # ---- Adminer DB (HTTPS) ----
     server {
         listen 443 ssl;
-        server_name db-admin.$DOMAIN;
+        server_name db-admin.__DOMAIN__;
 
-        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
 
         location / {
             proxy_pass http://devplatform-adminer:8080;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
         }
     }
 
-    # ---- Wildcard subdomain user → code-server (HTTPS) ----
     server {
         listen 443 ssl;
-        server_name ~^(?<username>[a-z][a-z0-9]+)\.$DOMAIN\$;
+        server_name ~^(?<username>[a-z][a-z0-9]+)\.__DOMAIN__$;
 
-        ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+        ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
 
         location / {
-            proxy_pass http://codeserver-\$username:8443;
-            proxy_set_header Host \$host;
-            proxy_set_header Upgrade \$http_upgrade;
+            proxy_pass http://codeserver-$username:8443;
+            proxy_set_header Host $host;
+            proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection upgrade;
             proxy_set_header Accept-Encoding gzip;
             proxy_set_header X-Forwarded-Proto https;
@@ -160,16 +157,27 @@ http {
         }
     }
 
-    # ---- Catch-all ----
     server {
         listen 80 default_server;
         server_name _;
-        return 301 https://$DOMAIN\$request_uri;
+        return 301 https://__DOMAIN__$request_uri;
     }
 }
 NGINXEOF
 
+# Substitusi placeholder dengan domain asli
+sed -i "s|__DOMAIN__|$DOMAIN|g" "$PROJECT_DIR/nginx/nginx.conf"
+
 echo -e "${GREEN}✓ nginx.conf diupdate dengan HTTPS${NC}"
+
+# Validasi config sebelum restart
+echo -e "${CYAN}Validasi nginx config...${NC}"
+if ! docker run --rm -v "$PROJECT_DIR/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+     -v /etc/letsencrypt:/etc/letsencrypt:ro nginx:alpine nginx -t 2>&1; then
+  echo -e "${RED}✗ nginx config error! Cek $PROJECT_DIR/nginx/nginx.conf${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓ nginx config valid${NC}"
 
 # Update .env supaya portal pakai HTTPS
 sed -i 's|^PROTOCOL=.*|PROTOCOL=https|' "$PROJECT_DIR/.env" 2>/dev/null || \

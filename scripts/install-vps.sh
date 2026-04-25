@@ -165,7 +165,7 @@ echo -e "${GREEN}✓ File .env dibuat${NC}"
 
 # Generate nginx.conf dengan domain yang benar
 echo -e "${CYAN}Membuat konfigurasi Nginx...${NC}"
-cat > nginx/nginx.conf << NGINXEOF
+cat > nginx/nginx.conf << 'NGINXEOF'
 events {
     worker_connections 1024;
 }
@@ -173,47 +173,45 @@ events {
 http {
     resolver 127.0.0.11 valid=30s ipv6=off;
 
-    # ---- Portal utama ----
     server {
         listen 80;
-        server_name $DOMAIN;
+        server_name __DOMAIN__;
 
         client_max_body_size 50M;
 
         location / {
             proxy_pass http://devplatform-portal:3000;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
             proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_read_timeout 60s;
             proxy_connect_timeout 10s;
         }
     }
 
-    # ---- Adminer: db-admin.$DOMAIN ----
     server {
         listen 80;
-        server_name db-admin.$DOMAIN;
+        server_name db-admin.__DOMAIN__;
 
         location / {
             proxy_pass http://devplatform-adminer:8080;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
         }
     }
 
-    # ---- Catch-all ----
     server {
         listen 80 default_server;
         server_name _;
-        return 301 http://$DOMAIN\$request_uri;
+        return 301 http://__DOMAIN__$request_uri;
     }
 }
 NGINXEOF
+sed -i "s|__DOMAIN__|$DOMAIN|g" nginx/nginx.conf
 echo -e "${GREEN}✓ nginx.conf dibuat untuk domain: $DOMAIN${NC}"
 
 # Build & start semua service

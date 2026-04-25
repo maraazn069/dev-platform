@@ -109,11 +109,21 @@ docker exec devplatform-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "
 
 # Tambahkan server block nginx untuk subdomain user
 NGINX_CONF="$PROJECT_DIR/nginx/nginx.conf"
-if ! grep -q "codeserver-$USERNAME" "$NGINX_CONF" 2>/dev/null; then
+
+# Cek apakah HTTPS sudah aktif (ada wildcard regex)
+if grep -q "username>" "$NGINX_CONF" 2>/dev/null; then
+  echo -e "${GREEN}✓ Wildcard HTTPS aktif — $USERNAME.$DOMAIN otomatis ter-handle${NC}"
+elif grep -q "codeserver-$USERNAME" "$NGINX_CONF" 2>/dev/null; then
+  echo -e "${GREEN}✓ Nginx sudah dikonfigurasi untuk $USERNAME${NC}"
+else
   echo -e "${YELLOW}Menambah konfigurasi nginx untuk $USERNAME.$DOMAIN...${NC}"
 
-  # Sisipkan server block baru sebelum baris penutup terakhir "}"
-  NEW_BLOCK="
+  # Hapus baris penutup terakhir "}" (penutup http block), simpan ke temp
+  head -n -1 "$NGINX_CONF" > "$NGINX_CONF.tmp"
+
+  # Append server block baru + tutup http block
+  cat >> "$NGINX_CONF.tmp" << USERBLOCK
+
     server {
         listen 80;
         server_name $USERNAME.$DOMAIN;
@@ -126,16 +136,21 @@ if ! grep -q "codeserver-$USERNAME" "$NGINX_CONF" 2>/dev/null; then
             proxy_set_header Accept-Encoding gzip;
             proxy_read_timeout 86400s;
         }
-    }"
+    }
+}
+USERBLOCK
 
-  # Tambahkan sebelum baris "}" terakhir di file
-  sed -i "$ s/^}/    $NEW_BLOCK\n}/" "$NGINX_CONF" 2>/dev/null || \
-  echo "$NEW_BLOCK" >> "$NGINX_CONF"
+  mv "$NGINX_CONF.tmp" "$NGINX_CONF"
 
-  # Reload nginx
-  docker compose -f "$PROJECT_DIR/docker-compose.yml" restart nginx 2>/dev/null || \
-  docker restart nginx-proxy 2>/dev/null || true
-  echo -e "${GREEN}✓ Nginx dikonfigurasi untuk $USERNAME.$DOMAIN${NC}"
+  # Validasi sebelum reload
+  if docker run --rm -v "$NGINX_CONF:/etc/nginx/nginx.conf:ro" \
+       -v /etc/letsencrypt:/etc/letsencrypt:ro nginx:alpine nginx -t 2>/dev/null; then
+    docker compose -f "$PROJECT_DIR/docker-compose.yml" restart nginx 2>/dev/null || \
+    docker restart nginx-proxy 2>/dev/null || true
+    echo -e "${GREEN}✓ Nginx dikonfigurasi untuk $USERNAME.$DOMAIN${NC}"
+  else
+    echo -e "${RED}✗ Nginx config error setelah tambah user — cek manual${NC}"
+  fi
 fi
 
 # Simpan info user
