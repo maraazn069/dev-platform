@@ -130,3 +130,93 @@ sudo bash scripts/add-user.sh namauser password123
 - Wildcard cert `*.DOMAIN` cover otomatis
 - UI portal & dashboard tampilkan tombol "🚀 Buka phpMyAdmin/pgAdmin"
 - `.env` baru: `PGADMIN_EMAIL`, `PGADMIN_PASSWORD`
+
+## Update Sesi (Apr 25 - Multi-DB Per User) ⭐ ARSITEKTUR BARU
+### Tujuan
+Setiap user punya kredensial DB sendiri, bisa create/drop database dari dashboard,
+akses remote dari laptop (DBeaver/Workbench), dan auto-login ke phpMyAdmin tanpa isi password.
+
+### Perubahan Infrastruktur
+- **Dockerfile.portal** install `docker-cli` + `openssl` → portal bisa exec ke container
+  MySQL/Postgres/nginx untuk provision user secara real-time (no manual shell command)
+- **docker-compose.yml**:
+  - Mount `/var/run/docker.sock` ke portal (kontrol Docker)
+  - Mount `/opt/devplatform/data` ke portal (buat folder user)
+  - Mount nginx config rw (auto-tambah subdomain user)
+  - MySQL & Postgres expose ke `0.0.0.0:3306` & `0.0.0.0:5432` (bind-address 0.0.0.0)
+  - Pass `POSTGRES_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `PGADMIN_EMAIL`, `PGADMIN_PASSWORD` ke portal env
+- **scripts/install-vps.sh**: ufw allow `3306/tcp` & `5432/tcp`
+
+### Backend Services Baru
+- `server/services/dockerExec.js`: helper exec command di container
+- `server/services/userManager.js`:
+  - `provisionUser({username, password, displayName, email})` — buat user portal +
+    generate password MySQL/PG (16 byte random), CREATE USER di kedua DB, buat default
+    database `<username>_default`, GRANT ALL, jalankan container code-server, tambah
+    nginx subdomain
+  - `removeUser(username)` — DROP USER + DROP database semua, hapus container, hapus
+    nginx config, hapus folder data, hapus dari users.json
+  - `createDatabase(username, type, name)` — buat DB baru `<username>_<name>`, GRANT ALL
+  - `dropDatabase(username, type, name)` — DROP DB (default tidak bisa dihapus)
+  - `repairUserCredentials(username)` — generate ulang password MySQL/PG untuk user lama
+  - `getCredentials(username)`, `safeDbName()`, `isValidName()`
+- `server/services/nginxManager.js`: `ensureUserSubdomain(username, port)` — append
+  block server `username.DOMAIN` ke nginx config + reload
+
+### Endpoint API Baru
+- `GET /api/db/info` → host/port remote + internal + user/password user yg login
+- `GET /api/databases` → list database user (mysql + pg)
+- `POST /api/databases {type, name}` → buat database baru
+- `DELETE /api/databases/:type/:name` → hapus database (default protected)
+- `GET /api/launch/phpmyadmin?db=NAME` → halaman auto-submit form login phpMyAdmin
+  (browser POST `pma_username` + `pma_password` → user langsung masuk)
+- `GET /api/launch/pgadmin` → halaman instruksi connect (pgAdmin tidak support SSO
+  karena CSRF token, jadi tampilkan kredensial admin + step-by-step add server)
+- `POST /admin/users/repair-db {username}` → regenerate kredensial DB user lama
+- `GET /admin/users/:username/credentials` → admin lihat password DB user
+
+### UI Dashboard User (Database Saya)
+- Section **Database Saya** dengan card MySQL & PostgreSQL
+- Tombol **"+ Buat Database"** modal (pilih type + nama)
+- List database dengan tombol **Buka** (auto-login phpMyAdmin) & **Hapus**
+- Section **Akses Remote** dengan info host/port/user/password (toggle show/hide
+  password, tombol Copy, command CLI siap copy untuk `mysql`/`psql`)
+- Tombol launcher **🚀 Buka phpMyAdmin (auto-login)** & **🚀 Buka pgAdmin (instruksi)**
+
+### UI Admin Panel
+- Modal **Tambah User** sekarang menampilkan kredensial yang baru di-generate
+  (login portal + MySQL pw + PG pw) — admin bisa copy & kasih ke user
+- Tombol per user:
+  - **🐘 DB** → modal lihat kredensial DB + list database user
+  - **⚙️ Repair DB** (muncul kalau `hasDbCredentials = false`, untuk user lama yang
+    dibuat sebelum sistem multi-DB)
+- Hapus semua referensi `shellCommand` (dulu admin harus copy command ke SSH;
+  sekarang portal lakukan semua via docker.sock)
+
+### Konvensi Penamaan Database
+- Format: `<username>_<dbname>` (huruf kecil, angka, underscore, max 31 karakter)
+- Default DB tiap user: `<username>_default` (auto-create saat provision, tidak bisa
+  dihapus — diproteksi server-side)
+- **MySQL grant (isolasi ketat)**: `ALL PRIVILEGES ON \`<username>\\_%\`.* TO user`
+  — user TIDAK punya CREATE/DROP/SHOW DATABASES di `*.*`. Database dibuat oleh portal
+  pakai root account; user cuma bisa CRUD di DB miliknya sendiri.
+- **PostgreSQL**: role login WITHOUT CREATEDB. Database dibuat portal pakai postgres
+  superuser. Mencegah user bikin DB sembarangan via psql remote.
+- Akibatnya: user yg pakai DBeaver/Workbench tidak bisa "DROP DATABASE alice_default"
+  walaupun port 3306/5432 publik.
+
+### Hardening Keamanan Tambahan
+- `dockerExec.js` pakai `dockerExecStdin()` — SQL dipipe via stdin, bukan via shell
+  argument. Tidak ada `sh -c` lagi → no shell injection meskipun SQL berisi karakter aneh.
+- `dropDatabase()` validasi `isValidName()` + cek `default` server-side (bukan cuma UI).
+- `removeUser()` enumerasi DB aktual dari `information_schema.schemata` & `pg_database`
+  pakai pattern `<username>_%` (bukan trust users.json), terminate koneksi PG aktif,
+  drop folder data, dan TIDAK menghapus user dari users.json kalau ada error
+  (set `deletionPending` flag supaya bisa retry manual).
+- pgAdmin admin email/password TIDAK dirender di halaman user — admin dapat lewat
+  `GET /admin/pgadmin-credentials` (admin-only) untuk dishare manual ke user.
+
+### Default Login
+- Admin: `admin` / `admin123`
+- User 1 (lama): `user1` / `user1234` — perlu klik **Repair DB** di admin panel
+  supaya dapat kredensial DB

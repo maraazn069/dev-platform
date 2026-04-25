@@ -8,91 +8,103 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; }
     nav {
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
-      padding: 0 24px;
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      background: #161b22; border-bottom: 1px solid #30363d;
+      padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
     }
     .nav-brand { display: flex; align-items: center; gap: 10px; color: #f0f6fc; font-weight: 600; font-size: 1rem; }
     .nav-right { display: flex; align-items: center; gap: 12px; }
     .avatar {
-      width: 32px; height: 32px;
-      background: #1f6feb;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; background: #1f6feb;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 0.85rem; color: #fff;
     }
     .nav-username { font-size: 0.85rem; color: #8b949e; }
     .btn-logout {
       background: transparent; border: 1px solid #30363d;
       color: #8b949e; padding: 6px 14px; border-radius: 6px;
-      cursor: pointer; font-size: 0.8rem; transition: all 0.2s;
+      cursor: pointer; font-size: 0.8rem;
     }
     .btn-logout:hover { border-color: #f85149; color: #f85149; }
-    .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
-    .welcome { margin-bottom: 32px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    .welcome { margin-bottom: 28px; }
     .welcome h2 { font-size: 1.5rem; color: #f0f6fc; }
     .welcome p { color: #8b949e; margin-top: 4px; font-size: 0.9rem; }
     .section-title {
       font-size: 0.85rem; color: #8b949e; text-transform: uppercase;
-      letter-spacing: 0.5px; margin-bottom: 12px;
+      letter-spacing: 0.5px; margin: 24px 0 12px;
       display: flex; align-items: center; gap: 8px;
     }
     .section-title::after { content: ''; flex: 1; height: 1px; background: #21262d; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
-    .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
-    .card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 10px;
-      padding: 20px;
+    .section-title button {
+      background: #1f6feb; color: #fff; border: none; border-radius: 6px;
+      padding: 5px 12px; font-size: .75rem; font-weight: 600; cursor: pointer;
     }
-    .card:hover { border-color: #1f6feb44; }
-    .card h4 { color: #f0f6fc; font-size: 0.95rem; margin-bottom: 6px; }
-    .card p { color: #8b949e; font-size: 0.82rem; line-height: 1.5; }
+    .section-title button:hover { background: #388bfd; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .card {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 10px; padding: 18px;
+    }
     .project-card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 10px;
-      padding: 20px;
-      transition: all 0.2s;
-      cursor: pointer;
-      text-decoration: none;
-      display: block;
+      background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+      padding: 18px; cursor: pointer; text-decoration: none; display: block;
+      transition: all .2s;
     }
     .project-card:hover { border-color: #1f6feb; background: #1f2937; transform: translateY(-2px); }
-    .project-icon { font-size: 1.5rem; margin-bottom: 10px; }
-    .project-name { font-size: 1rem; color: #f0f6fc; font-weight: 600; margin-bottom: 4px; }
-    .project-meta { font-size: 0.8rem; color: #8b949e; }
+    .project-icon { font-size: 1.5rem; margin-bottom: 8px; }
+    .project-name { font-size: 1rem; color: #f0f6fc; font-weight: 600; }
+    .project-meta { font-size: 0.8rem; color: #8b949e; margin-top: 2px; }
     .btn-primary {
-      background: #1f6feb; color: #fff;
-      border: none; border-radius: 7px;
-      padding: 8px 16px; font-size: 0.85rem; font-weight: 600;
-      cursor: pointer; transition: background 0.2s;
+      background: #1f6feb; color: #fff; border: none; border-radius: 7px;
+      padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
     }
     .btn-primary:hover { background: #388bfd; }
     .btn-outline {
       background: transparent; color: #58a6ff;
       border: 1px solid #1f6feb; border-radius: 7px;
-      padding: 7px 14px; font-size: 0.85rem;
-      cursor: pointer; transition: all 0.2s;
+      padding: 7px 14px; font-size: 0.85rem; cursor: pointer;
     }
     .btn-outline:hover { background: #1f6feb22; }
-    .db-info { font-family: 'Consolas', monospace; font-size: 0.8rem; }
-    .db-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #21262d; }
-    .db-row:last-child { border-bottom: none; }
-    .db-key { color: #8b949e; }
-    .db-val { color: #79c0ff; }
-    .tag {
-      display: inline-block; font-size: 0.7rem;
-      padding: 2px 8px; border-radius: 20px;
-      border: 1px solid; margin-right: 4px;
+    .btn-danger {
+      background: transparent; color: #f85149;
+      border: 1px solid #f85149; border-radius: 6px;
+      padding: 4px 10px; font-size: 0.75rem; cursor: pointer;
     }
+    .btn-danger:hover { background: #f8514922; }
+    .tag { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
     .tag-pg { color: #3fb950; border-color: #238636; background: #23863611; }
     .tag-mysql { color: #f0883e; border-color: #9e6a03; background: #9e6a0311; }
+    .db-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #21262d; font-family:'Consolas',monospace; font-size:.78rem; align-items:center; gap:8px; }
+    .db-row:last-child { border-bottom: none; }
+    .db-key { color: #8b949e; }
+    .db-val { color: #79c0ff; flex: 1; text-align: right; word-break: break-all; }
+    .copy-btn {
+      cursor: pointer; color: #8b949e; font-size: .7rem;
+      padding: 1px 6px; border: 1px solid #30363d; border-radius: 3px;
+      background: transparent; flex-shrink: 0;
+    }
+    .copy-btn:hover { color: #58a6ff; border-color: #58a6ff; }
+    .pw-mask { color: #79c0ff; }
+    .db-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .db-list-item {
+      background: #0d1117; border: 1px solid #21262d; border-radius: 8px;
+      padding: 12px 14px; margin-top: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .db-list-name { font-family: 'Consolas', monospace; font-size: .85rem; color: #f0f6fc; }
+    .db-list-meta { font-size: .72rem; color: #8b949e; margin-top: 2px; }
+    .launch-buttons { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .launch-btn {
+      flex: 1; min-width: 130px; text-align: center;
+      padding: 9px 12px; border-radius: 7px; text-decoration: none;
+      font-size: .82rem; font-weight: 600;
+    }
+    .launch-mysql { background: #f0883e; color: #fff; }
+    .launch-mysql:hover { background: #e07b30; }
+    .launch-pg { background: #1f6feb; color: #fff; }
+    .launch-pg:hover { background: #388bfd; }
     .modal-overlay {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.7); z-index: 100;
@@ -100,20 +112,19 @@
     }
     .modal-overlay.open { display: flex; }
     .modal {
-      background: #161b22; border: 1px solid #30363d;
-      border-radius: 12px; padding: 28px;
-      width: 100%; max-width: 420px;
+      background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+      padding: 26px; width: 100%; max-width: 440px;
     }
-    .modal h3 { color: #f0f6fc; margin-bottom: 16px; }
-    .form-group { margin-bottom: 14px; }
+    .modal h3 { color: #f0f6fc; margin-bottom: 14px; }
+    .form-group { margin-bottom: 12px; }
     .form-group label { display: block; font-size: 0.82rem; color: #8b949e; margin-bottom: 5px; }
-    .form-group input {
+    .form-group input, .form-group select {
       width: 100%; background: #0d1117; border: 1px solid #30363d;
       border-radius: 6px; padding: 9px 12px; color: #f0f6fc;
       font-size: 0.9rem; outline: none;
     }
-    .form-group input:focus { border-color: #1f6feb; }
-    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .form-group input:focus, .form-group select:focus { border-color: #1f6feb; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
     .btn-cancel {
       background: transparent; color: #8b949e;
       border: 1px solid #30363d; border-radius: 7px;
@@ -122,6 +133,13 @@
     .alert { padding: 10px 14px; border-radius: 7px; font-size: 0.85rem; margin-top: 12px; display: none; }
     .alert.success { background: #0d2e17; border: 1px solid #238636; color: #3fb950; }
     .alert.error { background: #3d1a1a; border: 1px solid #f85149; color: #f85149; }
+    .info-box {
+      background: #0d1117; border: 1px solid #21262d; border-radius: 8px;
+      padding: 14px; margin-top: 8px;
+    }
+    .info-box h5 { font-size: .82rem; color: #f0f6fc; margin-bottom: 8px; }
+    details summary { cursor: pointer; padding: 6px 0; color: #58a6ff; font-size: .82rem; }
+    details summary:hover { color: #79c0ff; }
   </style>
 </head>
 <body>
@@ -137,7 +155,7 @@
   <div class="container">
     <div class="welcome">
       <h2>Halo, <span id="displayName">...</span> 👋</h2>
-      <p>Pilih project yang ingin kamu buka, atau lihat info database di bawah.</p>
+      <p>Pilih project untuk buka VS Code, atau kelola database kamu di bawah.</p>
     </div>
 
     <div class="section-title">Project Kamu</div>
@@ -145,9 +163,22 @@
       <div style="color:#8b949e; font-size:0.85rem;">Memuat project...</div>
     </div>
 
-    <div class="section-title">Database Bersama</div>
-    <div class="grid-2" id="dbGrid">
+    <div class="section-title">
+      <span>Database Saya</span>
+      <button onclick="openModal('createDbModal')">+ Buat Database</button>
+    </div>
+
+    <div id="noCredsAlert" style="display:none;background:#3d2c1a;border:1px solid #f0883e;border-radius:8px;padding:14px;margin-bottom:14px;color:#f0883e;font-size:.85rem;">
+      ⚠️ Akun database kamu belum di-generate. Minta admin jalankan <b>"Repair DB Credentials"</b> di panel admin.
+    </div>
+
+    <div class="grid-2" id="dbCardsGrid">
       <div style="color:#8b949e; font-size:0.85rem;">Memuat info database...</div>
+    </div>
+
+    <div class="section-title">Akses Remote (DBeaver / MySQL Workbench / psql)</div>
+    <div class="card" id="remoteAccessCard">
+      <div style="color:#8b949e;font-size:.85rem;">Memuat info koneksi remote...</div>
     </div>
 
     <div class="section-title">Pengaturan Akun</div>
@@ -169,6 +200,31 @@
     </div>
   </div>
 
+  <!-- Modal: Buat Database -->
+  <div class="modal-overlay" id="createDbModal">
+    <div class="modal">
+      <h3>+ Buat Database Baru</h3>
+      <div class="form-group">
+        <label>Tipe Database</label>
+        <select id="newDbType">
+          <option value="mysql">MySQL</option>
+          <option value="postgres">PostgreSQL</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Nama Database (huruf kecil/angka/underscore)</label>
+        <input type="text" id="newDbName" placeholder="contoh: blog, toko_online">
+        <div style="font-size:.75rem;color:#8b949e;margin-top:4px;">Nama lengkap: <code id="newDbPreview" style="color:#79c0ff;">USERNAME_namamu</code></div>
+      </div>
+      <div class="alert" id="createDbAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('createDbModal')">Batal</button>
+        <button class="btn-primary" onclick="createDatabase()">Buat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Ganti Password -->
   <div class="modal-overlay" id="changePasswordModal">
     <div class="modal">
       <h3>🔑 Ganti Password</h3>
@@ -188,6 +244,7 @@
     </div>
   </div>
 
+  <!-- Modal: Ubah Email -->
   <div class="modal-overlay" id="changeEmailModal">
     <div class="modal">
       <h3>✉️ Ubah Email</h3>
@@ -209,14 +266,25 @@
 
   <script>
     let currentUser = null;
-    let domain = window.location.hostname;
+    let dbInfo = null;
+
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function copyToClipboard(text, btn) {
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => btn.textContent = orig, 1200);
+      });
+    }
 
     async function init() {
       const res = await fetch('/auth/me');
       if (!res.ok) return window.location.href = '/login';
       const data = await res.json();
       currentUser = data.user;
-      domain = window.location.hostname === 'localhost' ? 'dev.domainmu.com' : window.location.hostname;
 
       document.getElementById('displayName').textContent = currentUser.displayName;
       document.getElementById('navUsername').textContent = currentUser.username;
@@ -233,6 +301,14 @@
 
       loadProjects();
       loadDbInfo();
+
+      // Update preview nama database saat user ketik
+      document.getElementById('newDbName').addEventListener('input', updateDbPreview);
+    }
+
+    function updateDbPreview() {
+      const name = document.getElementById('newDbName').value || 'namamu';
+      document.getElementById('newDbPreview').textContent = `${currentUser.username}_${name}`;
     }
 
     async function loadProjects() {
@@ -243,12 +319,10 @@
 
       data.projects.forEach(p => {
         const a = document.createElement('a');
-        a.href = p.url;
-        a.target = '_blank';
-        a.className = 'project-card';
+        a.href = p.url; a.target = '_blank'; a.className = 'project-card';
         a.innerHTML = `
           <div class="project-icon">📁</div>
-          <div class="project-name">${p.name}</div>
+          <div class="project-name">${escHtml(p.name)}</div>
           <div class="project-meta">Klik untuk buka VS Code →</div>
         `;
         grid.appendChild(a);
@@ -261,47 +335,173 @@
 
     async function loadDbInfo() {
       const res = await fetch('/api/db/info');
-      const db = await res.json();
-      const grid = document.getElementById('dbGrid');
+      dbInfo = await res.json();
 
-      const proto = window.location.protocol;
+      const dbsRes = await fetch('/api/databases');
+      const dbsData = await dbsRes.json();
+      const dbs = dbsData.databases || [];
+
+      // Cek credentials
+      if (!dbInfo.mysql.password || !dbInfo.postgres.password) {
+        document.getElementById('noCredsAlert').style.display = 'block';
+      } else {
+        document.getElementById('noCredsAlert').style.display = 'none';
+      }
+
+      renderDbCards(dbs);
+      renderRemoteAccess();
+    }
+
+    function renderDbCards(dbs) {
+      const mysqlDbs = dbs.filter(d => d.type === 'mysql');
+      const pgDbs = dbs.filter(d => d.type === 'postgres');
+      const grid = document.getElementById('dbCardsGrid');
+
       grid.innerHTML = `
         <div class="card">
-          <h4><span class="tag tag-pg">PostgreSQL</span></h4>
-          <div class="db-info" style="margin-top:12px;">
-            <div class="db-row"><span class="db-key">Host</span><span class="db-val">${db.postgresql.host}</span></div>
-            <div class="db-row"><span class="db-key">Port</span><span class="db-val">${db.postgresql.port}</span></div>
-            <div class="db-row"><span class="db-key">Database</span><span class="db-val">${db.postgresql.database}</span></div>
-            <div class="db-row"><span class="db-key">Schema</span><span class="db-val">${db.postgresql.schema}</span></div>
-            <div class="db-row"><span class="db-key">User</span><span class="db-val">${db.postgresql.user}</span></div>
+          <div class="db-card-header">
+            <h4 style="color:#f0f6fc;"><span class="tag tag-mysql">MySQL</span> Database</h4>
           </div>
-          <p style="margin-top:10px;">${db.postgresql.note}</p>
-          <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;margin-top:8px;font-family:monospace;font-size:0.75rem;color:#7ee787;overflow-x:auto;">${db.postgresql.example}</div>
-          <a href="${proto}//${db.access.pgadmin_url}" target="_blank" style="display:inline-block;margin-top:10px;background:#1f6feb;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-size:0.82rem;font-weight:600;">🚀 Buka pgAdmin</a>
+          <div id="mysqlDbList"></div>
+          <div class="launch-buttons">
+            <a class="launch-btn launch-mysql" href="/api/launch/phpmyadmin" target="_blank">🚀 Buka phpMyAdmin (auto-login)</a>
+          </div>
         </div>
+
         <div class="card">
-          <h4><span class="tag tag-mysql">MySQL</span></h4>
-          <div class="db-info" style="margin-top:12px;">
-            <div class="db-row"><span class="db-key">Host</span><span class="db-val">${db.mysql.host}</span></div>
-            <div class="db-row"><span class="db-key">Port</span><span class="db-val">${db.mysql.port}</span></div>
-            <div class="db-row"><span class="db-key">Database</span><span class="db-val">${db.mysql.database}</span></div>
-            <div class="db-row"><span class="db-key">User</span><span class="db-val">${db.mysql.user}</span></div>
+          <div class="db-card-header">
+            <h4 style="color:#f0f6fc;"><span class="tag tag-pg">PostgreSQL</span> Database</h4>
           </div>
-          <p style="margin-top:10px;">${db.mysql.note}</p>
-          <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;margin-top:8px;font-family:monospace;font-size:0.75rem;color:#7ee787;overflow-x:auto;">${db.mysql.example}</div>
-          <a href="${proto}//${db.access.phpmyadmin_url}" target="_blank" style="display:inline-block;margin-top:10px;background:#f0883e;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-size:0.82rem;font-weight:600;">🚀 Buka phpMyAdmin</a>
+          <div id="pgDbList"></div>
+          <div class="launch-buttons">
+            <a class="launch-btn launch-pg" href="/api/launch/pgadmin" target="_blank">🚀 Buka pgAdmin (instruksi)</a>
+          </div>
         </div>
       `;
+
+      const mysqlList = document.getElementById('mysqlDbList');
+      if (mysqlDbs.length === 0) {
+        mysqlList.innerHTML = '<div style="color:#8b949e;font-size:.8rem;padding:8px 0;">Belum ada database. Klik "+ Buat Database" di atas.</div>';
+      } else {
+        mysqlList.innerHTML = mysqlDbs.map(d => `
+          <div class="db-list-item">
+            <div>
+              <div class="db-list-name">${currentUser.username}_${escHtml(d.name)}</div>
+              <div class="db-list-meta">dibuat ${new Date(d.createdAt).toLocaleDateString('id-ID')}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <a class="btn-outline" style="padding:5px 10px;font-size:.75rem;text-decoration:none;" href="/api/launch/phpmyadmin?db=${encodeURIComponent(d.name)}" target="_blank">Buka</a>
+              ${d.name !== 'default' ? `<button class="btn-danger" onclick="dropDatabase('mysql','${escHtml(d.name)}')">Hapus</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+
+      const pgList = document.getElementById('pgDbList');
+      if (pgDbs.length === 0) {
+        pgList.innerHTML = '<div style="color:#8b949e;font-size:.8rem;padding:8px 0;">Belum ada database. Klik "+ Buat Database" di atas.</div>';
+      } else {
+        pgList.innerHTML = pgDbs.map(d => `
+          <div class="db-list-item">
+            <div>
+              <div class="db-list-name">${currentUser.username}_${escHtml(d.name)}</div>
+              <div class="db-list-meta">dibuat ${new Date(d.createdAt).toLocaleDateString('id-ID')}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              ${d.name !== 'default' ? `<button class="btn-danger" onclick="dropDatabase('postgres','${escHtml(d.name)}')">Hapus</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+    }
+
+    function renderRemoteAccess() {
+      const m = dbInfo.mysql, p = dbInfo.postgres;
+      const card = document.getElementById('remoteAccessCard');
+      const mPw = m.password || '(belum di-generate)';
+      const pPw = p.password || '(belum di-generate)';
+      const mConn = m.password ? `mysql -h ${m.remoteHost} -P ${m.remotePort} -u ${m.user} -p${mPw} ${m.defaultDb}` : '';
+      const pConn = p.password ? `psql "host=${p.remoteHost} port=${p.remotePort} user=${p.user} password=${pPw} dbname=${p.defaultDb}"` : '';
+
+      card.innerHTML = `
+        <div style="color:#8b949e;font-size:.83rem;margin-bottom:12px;">
+          Pakai info ini untuk konek dari laptop kamu (DBeaver, MySQL Workbench, psql, dll).
+          Server menerima koneksi remote di port standar.
+        </div>
+
+        <div class="info-box">
+          <h5><span class="tag tag-mysql">MySQL</span> Akses Remote</h5>
+          <div class="db-row"><span class="db-key">Host</span><span class="db-val">${escHtml(m.remoteHost)}</span><button class="copy-btn" onclick="copyToClipboard('${escHtml(m.remoteHost)}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">Port</span><span class="db-val">${m.remotePort}</span><button class="copy-btn" onclick="copyToClipboard('${m.remotePort}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">User</span><span class="db-val">${escHtml(m.user)}</span><button class="copy-btn" onclick="copyToClipboard('${escHtml(m.user)}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">Password</span><span class="db-val pw-mask" id="mPw" data-pw="${escHtml(mPw)}">••••••••</span><button class="copy-btn" onclick="togglePw('mPw')">Lihat</button><button class="copy-btn" onclick="copyToClipboard('${escHtml(mPw)}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">Default DB</span><span class="db-val">${escHtml(m.defaultDb)}</span></div>
+          <details style="margin-top:8px;"><summary>Tampilkan command CLI</summary>
+            <pre style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;margin-top:6px;font-size:.75rem;color:#7ee787;overflow-x:auto;">${escHtml(mConn)}</pre>
+          </details>
+        </div>
+
+        <div class="info-box" style="margin-top:14px;">
+          <h5><span class="tag tag-pg">PostgreSQL</span> Akses Remote</h5>
+          <div class="db-row"><span class="db-key">Host</span><span class="db-val">${escHtml(p.remoteHost)}</span><button class="copy-btn" onclick="copyToClipboard('${escHtml(p.remoteHost)}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">Port</span><span class="db-val">${p.remotePort}</span><button class="copy-btn" onclick="copyToClipboard('${p.remotePort}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">User</span><span class="db-val">${escHtml(p.user)}</span><button class="copy-btn" onclick="copyToClipboard('${escHtml(p.user)}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">Password</span><span class="db-val pw-mask" id="pPw" data-pw="${escHtml(pPw)}">••••••••</span><button class="copy-btn" onclick="togglePw('pPw')">Lihat</button><button class="copy-btn" onclick="copyToClipboard('${escHtml(pPw)}',this)">Copy</button></div>
+          <div class="db-row"><span class="db-key">Default DB</span><span class="db-val">${escHtml(p.defaultDb)}</span></div>
+          <details style="margin-top:8px;"><summary>Tampilkan command CLI</summary>
+            <pre style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px;margin-top:6px;font-size:.75rem;color:#7ee787;overflow-x:auto;">${escHtml(pConn)}</pre>
+          </details>
+        </div>
+      `;
+    }
+
+    function togglePw(id) {
+      const el = document.getElementById(id);
+      const pw = el.getAttribute('data-pw');
+      if (el.textContent === '••••••••') {
+        el.textContent = pw;
+      } else {
+        el.textContent = '••••••••';
+      }
     }
 
     function openModal(id) { document.getElementById(id).classList.add('open'); }
     function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+    async function createDatabase() {
+      const alert = document.getElementById('createDbAlert');
+      const type = document.getElementById('newDbType').value;
+      const name = document.getElementById('newDbName').value.trim();
+      if (!name) {
+        alert.className = 'alert error'; alert.textContent = 'Nama database wajib diisi.'; alert.style.display='block';
+        return;
+      }
+      const res = await fetch('/api/databases', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ type, name })
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) {
+        document.getElementById('newDbName').value = '';
+        setTimeout(() => { closeModal('createDbModal'); loadDbInfo(); alert.style.display='none'; }, 1200);
+      }
+    }
+
+    async function dropDatabase(type, name) {
+      if (!confirm(`Hapus database ${currentUser.username}_${name}? Data akan HILANG PERMANEN.`)) return;
+      const res = await fetch(`/api/databases/${type}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) loadDbInfo();
+      else alert('Gagal: ' + data.message);
+    }
+
     async function changePassword() {
       const alert = document.getElementById('pwAlert');
       const res = await fetch('/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           oldPassword: document.getElementById('oldPassword').value,
           newPassword: document.getElementById('newPassword').value
@@ -323,8 +523,7 @@
       const newEmail = document.getElementById('newEmail').value.trim();
       const password = document.getElementById('emailPassword').value;
       const res = await fetch('/auth/change-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ email: newEmail, password })
       });
       const data = await res.json();

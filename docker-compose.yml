@@ -11,6 +11,8 @@
 services:
 
   # ---- Portal Login & Dashboard ----
+  # Mount docker.sock supaya portal bisa exec ke container lain (mysql, postgres, nginx)
+  # untuk provision user, create database, reload nginx, dll
   portal:
     build:
       context: .
@@ -25,8 +27,16 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - DOMAIN=${DOMAIN}
       - PROTOCOL=${PROTOCOL:-http}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGADMIN_EMAIL=${PGADMIN_EMAIL:-admin@local.dev}
+      - PGADMIN_PASSWORD=${PGADMIN_PASSWORD:-admin123}
+      - TZ=${TZ:-Asia/Jakarta}
     volumes:
       - ./server/data:/app/server/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/devplatform/data:/opt/devplatform/data
+      - ./nginx/nginx.conf:/app/nginx/nginx.conf
     networks:
       - devplatform
     healthcheck:
@@ -54,12 +64,13 @@ services:
         condition: service_healthy
 
   # ---- PostgreSQL Shared (untuk semua user belajar) ----
+  # Port 5432 dibuka publik supaya user bisa konek dari laptop (DBeaver, pgAdmin, dll)
   postgres:
     image: postgres:15-alpine
     container_name: devplatform-postgres
     restart: unless-stopped
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     environment:
       POSTGRES_DB: devplatform
       POSTGRES_USER: postgres
@@ -77,12 +88,13 @@ services:
       retries: 5
 
   # ---- MySQL Shared (untuk semua user belajar) ----
+  # Port 3306 dibuka publik supaya user bisa konek dari laptop (MySQL Workbench, dll)
   mysql:
     image: mysql:8.0
     container_name: devplatform-mysql
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3306:3306"
+      - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: devplatform_shared
@@ -93,7 +105,7 @@ services:
       - ./scripts/init-mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - devplatform
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --bind-address=0.0.0.0
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -102,6 +114,7 @@ services:
 
   # ---- phpMyAdmin: Web UI lengkap untuk MySQL (gaya cPanel) ----
   # Akses: https://mysql.dev.domainmu.com
+  # AllowArbitraryServer aktif supaya bisa auto-login dari portal dengan kredensial user
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: devplatform-phpmyadmin
@@ -165,8 +178,8 @@ services:
       - devplatform
 
 # ---- Container code-server per user ----
-# Dibuat otomatis oleh: sudo bash scripts/add-user.sh namauser
-# Tidak didefinisikan di sini supaya lebih fleksibel
+# Dibuat otomatis oleh portal saat admin tambah user dari /admin
+# Atau manual: sudo bash scripts/add-user.sh namauser
 
 volumes:
   postgres_data:

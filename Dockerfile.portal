@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Install docker CLI agar portal bisa exec command ke container lain (mysql, postgres, nginx)
+RUN apk add --no-cache docker-cli openssl
+
 WORKDIR /app
 
 COPY package*.json ./

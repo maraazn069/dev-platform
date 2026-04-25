@@ -120,8 +120,10 @@ ufw default allow outgoing > /dev/null
 ufw allow 22/tcp > /dev/null
 ufw allow 80/tcp > /dev/null
 ufw allow 443/tcp > /dev/null
+ufw allow 3306/tcp > /dev/null   # MySQL untuk akses remote (DBeaver/Workbench)
+ufw allow 5432/tcp > /dev/null   # PostgreSQL untuk akses remote (psql/pgAdmin desktop)
 ufw --force enable > /dev/null
-echo -e "${GREEN}✓ Firewall aktif (22, 80, 443)${NC}"
+echo -e "${GREEN}✓ Firewall aktif (22, 80, 443, 3306, 5432)${NC}"
 
 # [7/8] Clone atau setup repo
 echo -e "${CYAN}[7/8]${NC} Setup direktori project..."

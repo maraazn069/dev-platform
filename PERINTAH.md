@@ -148,24 +148,64 @@ sudo bash scripts/setup-https.sh
 
 ---
 
-## 4️⃣ Tambah / Hapus User
+## 4️⃣ Tambah / Hapus User (⭐ Sekarang dari Admin Panel — No SSH!)
 
-### Tambah User Baru
+Mulai versi **multi-DB per user**, semua dilakukan dari **Admin Panel di browser**:
+
+1. Login admin di https://dev.netprem.org → menu **Panel Admin**
+2. Klik **➕ Tambah User**, isi username + nama + password (+ email opsional)
+3. Tunggu ~10 detik (portal otomatis: bikin container code-server, generate password
+   MySQL & PostgreSQL random, bikin database `<username>_default`, register subdomain
+   nginx, reload nginx)
+4. Setelah sukses, **muncul kredensial DB di modal** — copy & kasih ke user
+5. User login → buka dashboard → tab **Database Saya** untuk lihat sendiri
+
+### Tombol per User di Admin Panel
+| Tombol | Fungsi |
+|--------|--------|
+| **+ Project** | Tambah folder project baru di code-server user |
+| **🔑** | Reset password login portal |
+| **🐘 DB** | Lihat password MySQL & PostgreSQL user (untuk troubleshoot) |
+| **⚙️ Repair DB** | (muncul kalau user lama belum punya kredensial DB) Generate ulang password DB |
+| **Hapus** | Hapus user + container + database MySQL + database PostgreSQL + folder project — **PERMANEN** |
+
+### Manual via SSH (Hanya untuk Emergency)
+Kalau admin panel down, masih bisa manual:
 ```bash
+# Tambah user manual (cara lama — tidak generate kredensial DB)
 cd ~/dev-platform
 sudo bash scripts/add-user.sh namauser passwordnya 8082
-# Format: namauser password port-codeserver
-# Port mulai dari 8082, 8083, 8084, dst (8081 sudah dipakai user1)
+
+# Setelah portal up lagi, klik "Repair DB" di admin panel untuk generate kredensial
 ```
 
-### Hapus User
+### Akses Database Remote dari Laptop
+Setiap user dapat akses MySQL & PostgreSQL dari laptop (DBeaver, MySQL Workbench, psql, dll):
+
+| Field | MySQL | PostgreSQL |
+|-------|-------|------------|
+| Host | `dev.netprem.org` | `dev.netprem.org` |
+| Port | `3306` | `5432` |
+| User | `<username>` | `<username>` |
+| Password | (di dashboard) | (di dashboard) |
+| Default DB | `<username>_default` | `<username>_default` |
+
+⚠️ Pastikan firewall VPS allow port `3306` & `5432` (otomatis di-set oleh `install-vps.sh`).
+Cek dengan:
 ```bash
-sudo docker rm -f codeserver-namauser
-sudo rm -rf /opt/devplatform/data/namauser
-# Hapus juga dari users.json:
-sudo nano ~/dev-platform/server/data/users.json
-sudo docker restart devplatform-portal
+sudo ufw status | grep -E "3306|5432"
 ```
+
+### Auto-Login phpMyAdmin
+Di dashboard user, klik **🚀 Buka phpMyAdmin (auto-login)** — browser akan langsung
+masuk tanpa perlu isi username/password. Dibuat dengan auto-submit form ke
+`mysql.dev.netprem.org` pakai kredensial user.
+
+### pgAdmin (Manual Add Server)
+pgAdmin tidak support SSO (kena CSRF), jadi user harus:
+1. Klik **🚀 Buka pgAdmin (instruksi)** di dashboard → halaman tampil step-by-step
+2. Login pgAdmin pakai admin email/password (sama untuk semua user)
+3. Right-click `Servers` → Register → Server → isi host/port/user/password sesuai instruksi
 
 ---
 

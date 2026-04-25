@@ -174,24 +174,23 @@
       </table>
     </div>
 
-    <div class="section-title">Database Shared</div>
+    <div class="section-title">Database Server</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:32px;">
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
         <div style="font-weight:600;color:#3fb950;margin-bottom:10px;">🐘 PostgreSQL</div>
         <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
-          Host: <span style="color:#79c0ff;">devplatform-postgres:5432</span><br>
-          Database: <span style="color:#79c0ff;">devplatform</span><br>
-          Admin: <span style="color:#79c0ff;">postgres</span><br>
-          Tiap user punya <strong style="color:#f0f6fc;">schema</strong> sendiri.<br>
+          Internal: <span style="color:#79c0ff;">devplatform-postgres:5432</span><br>
+          Remote : <span style="color:#79c0ff;" id="pgRemoteHost">DOMAIN:5432</span><br>
+          Tiap user punya <strong style="color:#f0f6fc;">database sendiri</strong> (USERNAME_default + custom).<br>
           Web UI: <a href="#" id="pgadminLink" style="color:#58a6ff;">🚀 Buka pgAdmin</a>
         </div>
       </div>
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
         <div style="font-weight:600;color:#f0883e;margin-bottom:10px;">🐬 MySQL</div>
         <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
-          Host: <span style="color:#79c0ff;">devplatform-mysql:3306</span><br>
-          Admin: <span style="color:#79c0ff;">root</span><br>
-          Tiap user punya <strong style="color:#f0f6fc;">database</strong> sendiri (db_namauser).<br>
+          Internal: <span style="color:#79c0ff;">devplatform-mysql:3306</span><br>
+          Remote : <span style="color:#79c0ff;" id="mysqlRemoteHost">DOMAIN:3306</span><br>
+          Tiap user punya <strong style="color:#f0f6fc;">database sendiri</strong> (USERNAME_default + custom).<br>
           Web UI: <a href="#" id="pmaLink" style="color:#58a6ff;">🚀 Buka phpMyAdmin</a>
         </div>
       </div>
@@ -211,14 +210,31 @@
         <input type="text" id="newDisplayName" placeholder="contoh: Budi Santoso">
       </div>
       <div class="form-group">
-        <label>Password Awal</label>
-        <input type="text" id="newPassword" placeholder="Min. 8 karakter">
+        <label>Password Awal <small style="color:#6e7681;">(min. 6 karakter)</small></label>
+        <input type="text" id="newPassword" placeholder="Password login portal">
+      </div>
+      <div class="form-group">
+        <label>Email <small style="color:#6e7681;">(opsional)</small></label>
+        <input type="email" id="newEmail" placeholder="user@contoh.com">
       </div>
       <div class="alert" id="addUserAlert"></div>
       <div class="shell-cmd" id="addUserCmd" style="display:none;"></div>
+      <div id="addUserCreds" style="display:none;background:#0d2e17;border:1px solid #238636;border-radius:8px;padding:14px;margin-top:12px;font-family:'Consolas',monospace;font-size:.78rem;color:#7ee787;">
+      </div>
       <div class="modal-btns">
         <button class="btn-cancel" onclick="closeModal('addUserModal')">Tutup</button>
         <button class="btn-primary" onclick="addUser()">Tambah User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Lihat Credentials Database -->
+  <div class="modal-overlay" id="viewCredsModal">
+    <div class="modal" style="max-width:520px;">
+      <h3>🔐 Database Credentials — <span id="viewCredsUser" style="color:#58a6ff;"></span></h3>
+      <div id="viewCredsBody" style="font-family:'Consolas',monospace;font-size:.82rem;color:#c9d1d9;">Memuat...</div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('viewCredsModal')">Tutup</button>
       </div>
     </div>
   </div>
@@ -272,6 +288,10 @@
       const pmaLink = document.getElementById('pmaLink');
       if (pgadminLink) { pgadminLink.href = `${proto}//pgadmin.${host}`; pgadminLink.target = '_blank'; }
       if (pmaLink) { pmaLink.href = `${proto}//mysql.${host}`; pmaLink.target = '_blank'; }
+      const pgRem = document.getElementById('pgRemoteHost');
+      const myRem = document.getElementById('mysqlRemoteHost');
+      if (pgRem) pgRem.textContent = `${host}:5432`;
+      if (myRem) myRem.textContent = `${host}:3306`;
       loadUsers();
       setInterval(loadUsers, 15000);
     }
@@ -330,6 +350,8 @@
           <td>
             <button class="action-btn" onclick="openAddProject('${u.username}')">+ Project</button>
             <button class="action-btn" onclick="openResetPw('${u.username}')">🔑</button>
+            <button class="action-btn" onclick="viewCreds('${u.username}')">🐘 DB</button>
+            ${!u.hasDbCredentials ? `<button class="action-btn" style="border-color:#f0883e;color:#f0883e;" onclick="repairDb('${u.username}')">⚙️ Repair DB</button>` : ''}
             <button class="action-btn danger" onclick="removeUser('${u.username}')">Hapus</button>
           </td>
         </tr>`;
@@ -340,38 +362,89 @@
     function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
     async function addUser() {
-      const alert = document.getElementById('addUserAlert');
-      const cmd = document.getElementById('addUserCmd');
+      const alertEl = document.getElementById('addUserAlert');
+      const credsEl = document.getElementById('addUserCreds');
+      const username = document.getElementById('newUsername').value;
+      const password = document.getElementById('newPassword').value;
+      alertEl.className = 'alert'; alertEl.style.display='none'; credsEl.style.display='none';
+      alertEl.textContent = 'Sedang membuat user (provision MySQL + PostgreSQL + container)...'; alertEl.style.display='block';
+
       const res = await fetch('/admin/users/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: document.getElementById('newUsername').value,
+          username,
           displayName: document.getElementById('newDisplayName').value,
-          password: document.getElementById('newPassword').value
+          password,
+          email: document.getElementById('newEmail').value
         })
       });
       const data = await res.json();
-      alert.className = 'alert ' + (data.success ? 'success' : 'error');
-      alert.textContent = data.message;
-      alert.style.display = 'block';
-      if (data.success) {
-        cmd.textContent = '# Jalankan di VPS:\n' + data.shellCommand;
-        cmd.style.display = 'block';
+      alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
+      alertEl.textContent = data.message + (data.warnings && data.warnings.length ? ' Peringatan: ' + data.warnings.join('; ') : '');
+      alertEl.style.display = 'block';
+      if (data.success && data.user) {
+        credsEl.innerHTML = `
+          <div style="color:#3fb950;font-weight:600;margin-bottom:8px;">✓ User dibuat. Simpan kredensial berikut:</div>
+          <div>Login Portal: <span style="color:#79c0ff;">${username}</span> / <span style="color:#79c0ff;">${password}</span></div>
+          <div>MySQL Password: <span style="color:#79c0ff;">${data.user.mysqlPassword}</span></div>
+          <div>PostgreSQL Password: <span style="color:#79c0ff;">${data.user.pgPassword}</span></div>
+          <div style="margin-top:6px;color:#8b949e;font-size:.72rem;">User bisa lihat semua ini di dashboard mereka setelah login.</div>
+        `;
+        credsEl.style.display = 'block';
         loadUsers();
       }
     }
 
     async function removeUser(username) {
-      if (!confirm(`Hapus user "${username}" dari portal? (Container di VPS harus dihapus manual)`)) return;
+      if (!confirm(`Hapus user "${username}" SEKARANG? Container, database MySQL, dan database PostgreSQL akan ikut DIHAPUS PERMANEN.`)) return;
       const res = await fetch('/admin/users/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username })
       });
       const data = await res.json();
-      if (data.success) { loadUsers(); alert(data.message + '\n\nJalankan di VPS:\n' + data.shellCommand); }
+      if (data.success) { loadUsers(); alert(data.message); }
       else alert('Error: ' + data.message);
+    }
+
+    async function repairDb(username) {
+      if (!confirm(`Generate ulang credentials database untuk "${username}"? Password lama akan tidak berlaku.`)) return;
+      const res = await fetch('/admin/users/repair-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✓ ${data.message}\n\nMySQL Password: ${data.mysqlPassword}\nPostgreSQL Password: ${data.pgPassword}\n\nKasih tau ke user!`);
+        loadUsers();
+      } else {
+        alert('Gagal: ' + data.message);
+      }
+    }
+
+    async function viewCreds(username) {
+      document.getElementById('viewCredsUser').textContent = username;
+      document.getElementById('viewCredsBody').innerHTML = 'Memuat...';
+      document.getElementById('viewCredsModal').classList.add('open');
+      const res = await fetch(`/admin/users/${username}/credentials`);
+      const data = await res.json();
+      if (!data.success) {
+        document.getElementById('viewCredsBody').innerHTML = `<div style="color:#f85149;">${data.message}</div>`;
+        return;
+      }
+      const dbs = (data.databases || []).map(d => `<li>${d.type}: <span style="color:#79c0ff;">${username}_${d.name}</span></li>`).join('');
+      document.getElementById('viewCredsBody').innerHTML = `
+        <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:12px;">
+          <div style="margin-bottom:6px;"><span style="color:#8b949e;">MySQL user:</span> <span style="color:#79c0ff;">${username}</span></div>
+          <div style="margin-bottom:6px;"><span style="color:#8b949e;">MySQL password:</span> <span style="color:#79c0ff;">${data.mysqlPassword || '(belum di-generate — klik Repair DB)'}</span></div>
+          <div style="margin-bottom:6px;"><span style="color:#8b949e;">PostgreSQL user:</span> <span style="color:#79c0ff;">${username}</span></div>
+          <div style="margin-bottom:10px;"><span style="color:#8b949e;">PostgreSQL password:</span> <span style="color:#79c0ff;">${data.pgPassword || '(belum di-generate — klik Repair DB)'}</span></div>
+          <div style="color:#8b949e;font-size:.78rem;">Database yang dimiliki:</div>
+          <ul style="margin-left:18px;color:#c9d1d9;font-size:.8rem;">${dbs || '<li style="color:#8b949e;">(belum ada)</li>'}</ul>
+        </div>
+      `;
     }
 
     function openResetPw(username) {
@@ -404,7 +477,6 @@
 
     async function addProject() {
       const alert = document.getElementById('addProjectAlert');
-      const cmd = document.getElementById('addProjectCmd');
       const res = await fetch('/admin/users/add-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -418,9 +490,9 @@
       alert.textContent = data.message;
       alert.style.display = 'block';
       if (data.success) {
-        cmd.textContent = '# Jalankan di VPS:\n' + data.shellCommand;
-        cmd.style.display = 'block';
+        document.getElementById('projectName').value = '';
         loadUsers();
+        setTimeout(() => closeModal('addProjectModal'), 1200);
       }
     }
 
