@@ -1,0 +1,66 @@
+gamerqu1@Potato:~$ ssh gamerqu1@20.200.209.228
+bash <(curl -fsSL https://raw.githubusercontent.com/maraazn069/dev-platform/main/scripts/install-vps.sh)
+The authenticity of host '20.200.209.228 (20.200.209.228)' can't be established.
+ED25519 key fingerprint is SHA256:x9S+Q/UHDEI8vgadvgXrSuxXBOla1KzDPGphPNm9QPE.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '20.200.209.228' (ED25519) to the list of known hosts.
+gamerqu1@20.200.209.228's password:
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1011-azure x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Sat Apr 25 08:00:49 UTC 2026
+
+  System load:  0.08              Processes:             145
+  Usage of /:   3.1% of 60.95GB   Users logged in:       1
+  Memory usage: 0%                IPv4 address for eth0: 10.0.0.4
+  Swap usage:   0%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+Last login: Sat Apr 25 07:55:41 2026 from 36.83.206.104
+gamerqu1@Potato:~$ ssh gamerqu1@20.200.209.228
+bash <(curl -fsSL https://raw.githubusercontent.com/maraazn069/dev-platform/main/scripts/install-vps.sh)
+gamerqu1@20.200.209.228's password:
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1011-azure x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Sat Apr 25 08:00:49 UTC 2026
+
+  System load:  0.08              Processes:             145
+  Usage of /:   3.1% of 60.95GB   Users logged in:       1
+  Memory usage: 0%                IPv4 address for eth0: 10.0.0.4
+  Swap usage:   0%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+Last login: Sat Apr 25 08:00:49 2026 from 20.200.209.228
+gamerqu1@Potato:~$
