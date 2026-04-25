@@ -208,21 +208,34 @@ Setelah reinstall semua login pakai 1 password yang kakak set saat installer (li
 ### ⚡ Opsi WIPE — Hapus TOTAL & Install Ulang (1 blok perintah)
 **Untuk reset bersih dari nol — copy-paste 1x jadi tinggal jalan.**
 ⚠️ SEMUA database, file user, sertifikat HTTPS, dan .env akan HILANG. Backup dulu kalau perlu.
+
+**PENTING:** Login VPS pakai user biasa (BUKAN root) supaya `git` gak bikin file `.git/objects` jadi milik root. Kalau kakak SSH-nya pakai `root`, ganti `$(whoami):$(whoami)` di bawah jadi `root:root`.
+
 ```bash
-ssh root@20.200.209.228
-cd ~/dev-platform && \
-  sudo bash scripts/backup.sh 2>/dev/null; \
-  sudo docker compose down -v --remove-orphans 2>/dev/null; \
-  sudo docker rm -f $(sudo docker ps -aq --filter "label=devplatform.user") 2>/dev/null; \
-  sudo docker rmi -f devplatform-codeserver:latest 2>/dev/null; \
-  sudo docker volume prune -f && sudo docker network prune -f; \
-  sudo rm -rf server/data/users.json server/data/audit.log server/data/projects.json /opt/devplatform/data/* /opt/devplatform/letsencrypt/*; \
-  sudo mv .env .env.backup-$(date +%Y%m%d-%H%M) 2>/dev/null; \
-  git pull origin main && \
-  sudo bash scripts/install-vps.sh && \
-  sudo bash scripts/setup-https.sh
+# Step 1: Update kode dari GitHub DULU (TANPA sudo, supaya .git tetap milik user)
+cd ~/dev-platform
+git checkout -- scripts/ 2>/dev/null   # buang local changes pada script (kalau ada)
+git pull origin main
+
+# Step 2: Stop semua container + hapus data lama
+sudo bash scripts/backup.sh 2>/dev/null
+sudo docker compose down -v --remove-orphans 2>/dev/null
+sudo docker rm -f $(sudo docker ps -aq --filter "label=devplatform.user") 2>/dev/null
+sudo docker rmi -f devplatform-codeserver:latest 2>/dev/null
+sudo docker volume prune -f && sudo docker network prune -f
+sudo rm -rf server/data/users.json server/data/audit.log server/data/projects.json /opt/devplatform/data/* /opt/devplatform/letsencrypt/*
+sudo mv .env .env.backup-$(date +%Y%m%d-%H%M) 2>/dev/null
+
+# Step 3: Pastikan .git tetap milik user (jaga-jaga)
+sudo chown -R $(whoami):$(whoami) ~/dev-platform/.git
+
+# Step 4: Install ulang
+sudo bash scripts/install-vps.sh
+sudo bash scripts/setup-https.sh
 ```
 Setelah selesai, login pakai 1 password admin (lihat tabel di Opsi 0).
+
+**📧 Tentang email admin:** boleh pakai email apa aja (gmail, yahoo, dll), gak harus dari domain. Contoh: `maraazn069@gmail.com` valid. Email cuma dipakai buat login pgAdmin dan kontak.
 
 ---
 
@@ -647,14 +660,16 @@ semuanya pakai password yang sama.
 - Tersimpan di `.env`.
 
 ### Tabel Login Cepat
-| Service | URL | Username | Password |
+| Service | URL | Username/Email | Password |
 |---|---|---|---|
-| Portal | `https://dev.netprem.org` | `admin` | password admin |
-| File Browser | `https://files.dev.netprem.org` | `admin` | password admin |
-| pgAdmin | `https://pgadmin.dev.netprem.org` | `admin@dev.netprem.org` | password admin |
-| phpMyAdmin | `https://mysql.dev.netprem.org` | `root` | password admin |
-| PostgreSQL remote | `20.200.209.228:5432` | `postgres` | password admin |
-| MySQL remote | `20.200.209.228:3306` | `root` | password admin |
+| Portal | `https://dev.netprem.org` | `admin` (atau yang kakak set) | password admin |
+| File Browser | `https://files.dev.netprem.org` | `admin` (sama dgn Portal) | password admin |
+| pgAdmin | `https://pgadmin.dev.netprem.org` | **email** yang kakak isi saat install (mis. `maraazn069@gmail.com`) | password admin |
+| phpMyAdmin | `https://mysql.dev.netprem.org` | `root` (paksaan MySQL) | password admin |
+| PostgreSQL remote | `20.200.209.228:5432` | `postgres` (paksaan PG) | password admin |
+| MySQL remote | `20.200.209.228:3306` | `root` (paksaan MySQL) | password admin |
+
+**⚠️ pgAdmin login pakai EMAIL, bukan kata "admin"** — pakai email yang kakak isi waktu installer (kalau pakai gmail ya gmail-nya itu, bukan domain).
 
 ### Ganti Password (Auto-Sync)
 1. Login ke Portal `https://dev.netprem.org/dashboard`
@@ -696,6 +711,44 @@ sudo docker exec devplatform-pgadmin /venv/bin/python /pgadmin4/setup.py update-
 ---
 
 ## 🔟 Troubleshooting Cepat
+
+### `git pull` error: "insufficient permission for adding an object to repository database .git/objects"
+Penyebab: ada file di `.git/` yang jadi milik root (gara-gara `sudo git ...` atau `sudo rm -rf` yang nyentuh `.git`).
+Fix:
+```bash
+sudo chown -R $(whoami):$(whoami) ~/dev-platform
+sudo chmod -R u+rwX ~/dev-platform/.git
+git pull origin main
+```
+
+### `git pull` error: "Your local changes to the following files would be overwritten by merge"
+Penyebab: installer di run sebelumnya nge-edit file script (`install-vps.sh`/`add-user.sh`/`setup-https.sh`) di tempat, jadi git deteksi konflik.
+Fix (buang perubahan lokal, percaya kode di GitHub):
+```bash
+cd ~/dev-platform
+git checkout -- scripts/    # buang local changes di folder scripts
+git pull origin main
+git log -1 --oneline        # verifikasi commit terbaru
+```
+
+### Installer masih tampil versi lama (masih nanya password DB terpisah, dll)
+Berarti `git pull` belum benar-benar update file. Cek dulu:
+```bash
+cd ~/dev-platform
+git log -1 --oneline
+# Bandingkan hash dengan commit terbaru di GitHub
+grep -c "Konfigurasi Database" scripts/install-vps.sh
+# HARUS 0 (versi baru) — kalau >0 berarti file masih versi lama, ulangi git pull
+```
+
+### Cara nuklir kalau .git rusak parah
+```bash
+cd ~
+mv dev-platform dev-platform.broken-$(date +%s)
+git clone https://github.com/maraazn069/dev-platform.git
+cd dev-platform
+sudo bash scripts/install-vps.sh
+```
 
 ### Portal tidak bisa diakses
 ```bash
