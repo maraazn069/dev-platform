@@ -80,7 +80,53 @@ git stash pop   # restore perubahan lokal kalau perlu
 
 ---
 
-## 3️⃣ Reinstall / Update Server di VPS
+## 3️⃣ Install / Reinstall / Update Server di VPS
+
+### 🆕 Opsi 0 — VPS BARU dari Nol (Fresh Ubuntu 24.04)
+Pakai ini kalau VPS Azure baru dibuat (belum pernah ada Docker / dev-platform).
+```bash
+# 1. SSH login ke VPS
+ssh root@20.200.209.228
+
+# 2. Update sistem dasar + install Git
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git curl wget
+
+# 3. Clone repo dari GitHub (dapat versi terbaru otomatis)
+cd ~
+git clone https://github.com/maraazn069/dev-platform.git
+cd dev-platform
+
+# 4. Jalankan installer (otomatis install Docker, generate .env, build container)
+#    Script akan tanya: domain, email admin, password admin awal, dll
+sudo bash scripts/install-vps.sh
+
+# 5. Pastikan DNS Cloudflare sudah aktif:
+#    A   dev.netprem.org      → 20.200.209.228
+#    A   *.dev.netprem.org    → 20.200.209.228 (wildcard untuk subdomain user)
+#    Cek: nslookup dev.netprem.org
+
+# 6. Aktifkan HTTPS wildcard (butuh Cloudflare API Token: Zone.DNS Read+Edit)
+sudo bash scripts/setup-https.sh
+
+# 7. Hardening sekali jalan (fail2ban, sysctl, disable root SSH, dll)
+sudo bash scripts/harden-vps.sh
+
+# 8. Pasang cron backup harian otomatis
+sudo bash scripts/install-backup-cron.sh
+
+# 9. Cek semua service hidup
+sudo docker ps
+curl -I https://dev.netprem.org
+curl -I https://files.dev.netprem.org
+```
+Setelah selesai, akses:
+- Portal admin: `https://dev.netprem.org/admin` (login admin/password yang di-set saat install)
+- File Browser: `https://files.dev.netprem.org` (login `admin/admin` → **WAJIB ganti**)
+- phpMyAdmin: `https://mysql.dev.netprem.org` (root + password dari `.env`)
+- pgAdmin: `https://pgadmin.dev.netprem.org` (lihat `cat .env | grep PGADMIN`)
+
+---
 
 ### 🔄 Opsi A — Update Cepat (data DB & user TIDAK hilang)
 Pakai ini kalau cuma update code/UI/config kecil.
@@ -94,56 +140,88 @@ sudo docker compose down
 # Rebuild image yang berubah (portal biasanya)
 sudo docker compose build portal
 
-# Pull image baru kalau ada (phpmyadmin, pgadmin, dll)
+# Pull image baru kalau ada (phpmyadmin, pgadmin, filebrowser, dll)
 sudo docker compose pull
 
 # Start ulang semua
 sudo docker compose up -d
+
+# Kalau ada service baru di compose (mis. filebrowser), nginx perlu di-update
+sudo bash scripts/setup-https.sh
 
 # Cek status
 sudo docker ps
 sudo docker logs devplatform-portal --tail 30
 ```
 
+---
+
 ### 🆕 Opsi B — Reinstall Bersih (⚠️ HAPUS semua data DB & user!)
-Pakai ini kalau mau install ulang dari nol.
+Pakai ini kalau mau install ulang dari nol di VPS yang sudah pernah ada dev-platform.
+**SEMUA database, project user, audit log, dan file workspace akan HILANG.**
 ```bash
 cd ~/dev-platform
+
+# 1. (OPSIONAL TAPI SANGAT DISARANKAN) backup dulu sebelum hapus
+sudo bash scripts/backup.sh
+ls -lh /opt/devplatform/backups/  # verifikasi backup ada
+
+# 2. Tarik update terbaru dari GitHub
 git pull origin main
 
-# Hapus semua container + volume (data DB, project user HILANG semua)
+# 3. Hapus semua container + volume (data DB, project user HILANG semua)
 sudo docker compose down -v
 
-# Hapus folder data lama kalau perlu
+# 4. Hapus folder data user + audit log + project list
 sudo rm -rf server/data/users.json
+sudo rm -rf server/data/audit.log
+sudo rm -rf server/data/projects.json
+sudo rm -rf /opt/devplatform/data/*
 
-# Install ulang (akan tanya domain, password DB, dll)
+# 5. (OPSIONAL) hapus .env supaya re-generate password baru
+sudo mv .env .env.backup-$(date +%Y%m%d) 2>/dev/null
+
+# 6. Install ulang (akan tanya domain, password DB, dll)
 sudo bash scripts/install-vps.sh
 
-# Setup HTTPS (butuh Cloudflare API token Zone.DNS)
+# 7. Setup HTTPS (butuh Cloudflare API token Zone.DNS Read+Edit)
 sudo bash scripts/setup-https.sh
-```
 
-### 🔧 Opsi C — Update Saja + Tambah Service Baru
-Pakai ini kalau ada service baru di docker-compose (mis. phpmyadmin/pgadmin baru ditambah).
+# 8. Cek hasil
+sudo docker ps
+curl -I https://dev.netprem.org
+curl -I https://files.dev.netprem.org
+```
+Setelah reinstall:
+- Login admin baru: pakai password yang di-set saat `install-vps.sh`
+- File Browser di https://files.dev.netprem.org login default `admin/admin` → **WAJIB ganti**
+- Tambah user lewat Panel Admin (bukan SSH)
+
+---
+
+### 🔧 Opsi C — Update + Tambah Service Baru (data AMAN)
+Pakai ini kalau ada service baru di `docker-compose.yml` (mis. filebrowser, pgadmin, dll baru ditambah).
 ```bash
 cd ~/dev-platform
 git pull origin main
 
-# Tambah env baru (kalau perlu, contoh PGADMIN_PASSWORD)
+# Tambah env baru kalau perlu (contoh untuk pgadmin)
 grep -q "PGADMIN_PASSWORD" .env || echo "PGADMIN_PASSWORD=$(openssl rand -base64 16)" | sudo tee -a .env
 grep -q "PGADMIN_EMAIL" .env || echo "PGADMIN_EMAIL=admin@netprem.org" | sudo tee -a .env
 
 # Catat password yang di-generate!
 grep PGADMIN .env
 
-# Stop, pull image baru, start
-sudo docker compose down
+# Pull image baru + start service baru saja (tidak restart yang lain)
 sudo docker compose pull
-sudo docker compose up -d --build
+sudo docker compose up -d                # akan create container baru, skip yang sudah ada
 
-# Update nginx config supaya subdomain baru ke-route
+# Update nginx supaya subdomain baru ke-route (mis. files.DOMAIN, pgadmin.DOMAIN)
 sudo bash scripts/setup-https.sh
+
+# Verifikasi
+sudo docker ps | grep -E "filebrowser|pgadmin"
+curl -I https://files.dev.netprem.org
 ```
 
 ---
