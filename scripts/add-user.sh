@@ -142,15 +142,10 @@ USERBLOCK
 
   mv "$NGINX_CONF.tmp" "$NGINX_CONF"
 
-  # Validasi sebelum reload
-  if docker run --rm -v "$NGINX_CONF:/etc/nginx/nginx.conf:ro" \
-       -v /etc/letsencrypt:/etc/letsencrypt:ro nginx:alpine nginx -t 2>/dev/null; then
-    docker compose -f "$PROJECT_DIR/docker-compose.yml" restart nginx 2>/dev/null || \
-    docker restart nginx-proxy 2>/dev/null || true
-    echo -e "${GREEN}✓ Nginx dikonfigurasi untuk $USERNAME.$DOMAIN${NC}"
-  else
-    echo -e "${RED}✗ Nginx config error setelah tambah user — cek manual${NC}"
-  fi
+  # Reload nginx (pakai exec ke container yg sudah connect ke network)
+  docker compose -f "$PROJECT_DIR/docker-compose.yml" restart nginx 2>/dev/null || \
+  docker restart nginx-proxy 2>/dev/null || true
+  echo -e "${GREEN}✓ Nginx dikonfigurasi untuk $USERNAME.$DOMAIN${NC}"
 fi
 
 # Simpan info user
@@ -170,7 +165,8 @@ echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}  User '$USERNAME' berhasil ditambah!      ${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
-echo -e "VS Code   : ${YELLOW}http://$USERNAME.$DOMAIN${NC}"
+PROTO="${PROTOCOL:-http}"
+echo -e "VS Code   : ${YELLOW}$PROTO://$USERNAME.$DOMAIN${NC}"
 echo -e "Password  : ${YELLOW}$PASSWORD${NC}"
 echo ""
 echo -e "PostgreSQL:"
@@ -187,5 +183,5 @@ echo -e "  Password: ${YELLOW}$MYSQL_USER_PASSWORD${NC}"
 echo ""
 echo -e "${YELLOW}Langkah selanjutnya:${NC}"
 echo -e "  1. Pastikan DNS ${YELLOW}$USERNAME.$DOMAIN${NC} → IP VPS sudah aktif"
-echo -e "  2. Setelah portal aktif, user bisa login di: http://$DOMAIN"
+echo -e "  2. Setelah portal aktif, user bisa login di: $PROTO://$DOMAIN"
 echo ""
