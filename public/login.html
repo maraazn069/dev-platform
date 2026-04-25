@@ -3,139 +3,343 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — Dev Platform</title>
+  <title>Dev Platform — Login</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0d1117;
-      color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0c0e12;
+      color: #e2e8f0;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
-    .bg-grid {
+
+    /* Animated background */
+    .bg {
       position: fixed; inset: 0; z-index: 0;
-      background-image: linear-gradient(rgba(31,111,235,0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(31,111,235,0.05) 1px, transparent 1px);
-      background-size: 40px 40px;
+      background: radial-gradient(ellipse 80% 60% at 50% -20%, #1a3a6e33, transparent),
+                  radial-gradient(ellipse 60% 50% at 80% 80%, #0f2a4a22, transparent);
     }
-    .card {
+    .bg-dots {
+      position: fixed; inset: 0; z-index: 0;
+      background-image: radial-gradient(circle, #ffffff08 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* Floating orbs */
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px); z-index: 0;
+      animation: float 8s ease-in-out infinite;
+    }
+    .orb-1 { width: 400px; height: 400px; background: #1d4ed820; top: -100px; left: -100px; animation-delay: 0s; }
+    .orb-2 { width: 300px; height: 300px; background: #7c3aed18; bottom: -50px; right: -50px; animation-delay: 3s; }
+    .orb-3 { width: 200px; height: 200px; background: #0ea5e915; top: 50%; right: 10%; animation-delay: 1.5s; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-20px) scale(1.05); }
+    }
+
+    .wrapper {
       position: relative; z-index: 1;
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 16px;
-      padding: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 100%;
-      max-width: 400px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      padding: 24px;
     }
-    .logo { text-align: center; margin-bottom: 32px; }
-    .logo .icon { font-size: 2.5rem; }
-    .logo h1 { font-size: 1.4rem; color: #f0f6fc; margin-top: 8px; }
-    .logo p { font-size: 0.85rem; color: #8b949e; margin-top: 4px; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; font-size: 0.85rem; color: #8b949e; margin-bottom: 6px; }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(15, 20, 30, 0.85);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 44px 40px 36px;
+      backdrop-filter: blur(20px);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 32px 80px rgba(0,0,0,0.6),
+        0 0 60px rgba(29,78,216,0.08);
+    }
+
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 16px rgba(29,78,216,0.4);
+    }
+    .logo-text { }
+    .logo-text h1 { font-size: 1.15rem; font-weight: 700; color: #f1f5f9; letter-spacing: -0.3px; }
+    .logo-text p { font-size: 0.75rem; color: #64748b; margin-top: 1px; }
+
+    .form-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .form-subtitle {
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    .form-group { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 7px;
+      letter-spacing: 0.2px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #475569;
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+
     input {
       width: 100%;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 12px 14px;
-      color: #f0f6fc;
-      font-size: 0.95rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 10px;
+      padding: 11px 14px 11px 40px;
+      color: #f1f5f9;
+      font-size: 0.925rem;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+      -webkit-appearance: none;
     }
-    input:focus { border-color: #1f6feb; }
-    .btn {
+
+    input:focus {
+      border-color: #3b82f6;
+      background: rgba(59,130,246,0.05);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    }
+
+    input::placeholder { color: #334155; }
+
+    .error-box {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 0.825rem;
+      color: #f87171;
+      margin-bottom: 18px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-login {
       width: 100%;
-      background: #1f6feb;
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
       color: #fff;
       border: none;
-      border-radius: 8px;
-      padding: 13px;
-      font-size: 1rem;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.925rem;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
-      margin-top: 8px;
+      transition: all 0.2s;
+      letter-spacing: 0.1px;
+      margin-top: 4px;
+      box-shadow: 0 4px 16px rgba(29,78,216,0.3);
+      position: relative;
+      overflow: hidden;
     }
-    .btn:hover { background: #388bfd; }
-    .btn:disabled { background: #30363d; cursor: not-allowed; }
-    .error {
-      background: #3d1a1a;
-      border: 1px solid #f85149;
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 0.85rem;
-      color: #f85149;
-      margin-bottom: 16px;
+
+    .btn-login::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .btn-login:hover::before { opacity: 1; }
+    .btn-login:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(29,78,216,0.4); }
+    .btn-login:active { transform: translateY(0px); }
+    .btn-login:disabled { background: #1e293b; box-shadow: none; cursor: not-allowed; transform: none; }
+    .btn-login span { position: relative; z-index: 1; }
+
+    .spinner {
       display: none;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0;
+      color: #1e293b;
+      font-size: 0.75rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .hint-box {
+      background: rgba(29,78,216,0.08);
+      border: 1px solid rgba(29,78,216,0.2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.78rem;
+      color: #60a5fa;
+      line-height: 1.6;
+    }
+    .hint-box strong { color: #93c5fd; }
+
     .footer-note {
       text-align: center;
+      margin-top: 20px;
       font-size: 0.75rem;
-      color: #6e7681;
-      margin-top: 24px;
+      color: #334155;
     }
   </style>
 </head>
 <body>
-  <div class="bg-grid"></div>
-  <div class="card">
-    <div class="logo">
-      <div class="icon">🖥️</div>
-      <h1>Dev Platform</h1>
-      <p>Platform Coding Mandiri — Untuk Belajar</p>
-    </div>
+  <div class="bg"></div>
+  <div class="bg-dots"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
 
-    <div class="error" id="errorMsg"></div>
-
-    <form id="loginForm">
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" placeholder="Masukkan username" autocomplete="username" required>
+  <div class="wrapper">
+    <div class="card">
+      <div class="logo-wrap">
+        <div class="logo-icon">🖥️</div>
+        <div class="logo-text">
+          <h1>Dev Platform</h1>
+          <p>Platform coding mandiri</p>
+        </div>
       </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Masukkan password" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn" id="loginBtn">Masuk</button>
-    </form>
 
-    <div class="footer-note">
-      Lupa password? Hubungi admin platform.
+      <div class="form-title">Selamat datang</div>
+      <div class="form-subtitle">Masuk untuk mengakses VS Code dan database kamu.</div>
+
+      <div class="error-box" id="errorBox">
+        <span>⚠</span>
+        <span id="errorMsg"></span>
+      </div>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <div class="input-wrap">
+            <span class="input-icon">👤</span>
+            <input type="text" id="username" name="username" placeholder="namauser" autocomplete="username" required autofocus>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+          </div>
+        </div>
+        <button type="submit" class="btn-login" id="loginBtn">
+          <span id="btnText">Masuk ke Platform</span>
+          <div class="spinner" id="spinner"></div>
+        </button>
+      </form>
+
+      <div class="divider">Info Login</div>
+
+      <div class="hint-box">
+        <strong>Default Admin:</strong> admin / admin123<br>
+        <strong>Default User:</strong> user1 / user1234<br>
+        Ganti password setelah login pertama!
+      </div>
+
+      <div class="footer-note">Lupa password? Hubungi admin platform.</div>
     </div>
   </div>
 
   <script>
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+
       const btn = document.getElementById('loginBtn');
+      const btnText = document.getElementById('btnText');
+      const spinner = document.getElementById('spinner');
+      const errorBox = document.getElementById('errorBox');
       const errorMsg = document.getElementById('errorMsg');
+
       btn.disabled = true;
-      btn.textContent = 'Memproses...';
-      errorMsg.style.display = 'none';
+      btnText.style.display = 'none';
+      spinner.style.display = 'block';
+      errorBox.style.display = 'none';
 
-      const res = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: document.getElementById('username').value,
-          password: document.getElementById('password').value
-        })
-      });
-      const data = await res.json();
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value
+          })
+        });
 
-      if (data.success) {
-        window.location.href = data.redirect;
-      } else {
-        errorMsg.textContent = data.message;
-        errorMsg.style.display = 'block';
+        const data = await res.json();
+
+        if (data.success) {
+          btnText.textContent = 'Berhasil! Mengalihkan...';
+          btnText.style.display = 'block';
+          spinner.style.display = 'none';
+          setTimeout(() => window.location.href = data.redirect, 400);
+        } else {
+          errorMsg.textContent = data.message;
+          errorBox.style.display = 'flex';
+          btn.disabled = false;
+          btnText.style.display = 'block';
+          spinner.style.display = 'none';
+          document.getElementById('password').value = '';
+          document.getElementById('password').focus();
+        }
+      } catch {
+        errorMsg.textContent = 'Koneksi gagal, coba lagi.';
+        errorBox.style.display = 'flex';
         btn.disabled = false;
-        btn.textContent = 'Masuk';
+        btnText.style.display = 'block';
+        spinner.style.display = 'none';
       }
     });
   </script>

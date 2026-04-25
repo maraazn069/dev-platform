@@ -24,12 +24,23 @@ if (!fs.existsSync(USERS_FILE)) {
       password: bcrypt.hashSync('admin123', 10),
       role: 'admin',
       displayName: 'Administrator',
+      port: null,
+      projects: [],
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'user-001',
+      username: 'user1',
+      password: bcrypt.hashSync('user1234', 10),
+      role: 'user',
+      displayName: 'User Pertama',
       port: 8081,
-      projects: ['project-contoh'],
+      projects: ['default', 'belajar-python', 'belajar-web'],
       createdAt: new Date().toISOString()
     }
   ];
   fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
+  console.log('Default users created: admin / admin123 | user1 / user1234');
 }
 
 app.use(express.json());

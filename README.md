@@ -1,196 +1,211 @@
 # 🖥️ Self-Hosted Dev Platform
 
-Platform coding mandiri di VPS kamu sendiri — VS Code di browser, multi-user, gratis, untuk belajar bareng.
-
-## Spesifikasi yang Direkomendasikan
-
-| Komponen | Minimum | Direkomendasikan (punyamu) |
-|---|---|---|
-| CPU | 2 vCPU | 4 vCPU ✅ |
-| RAM | 8 GB | 56 GB ✅ |
-| Storage | 50 GB SSD | 100 GB+ SSD |
-| OS | Ubuntu 22.04 | Ubuntu 22.04 LTS |
-
-VPS kamu (4 vCPU / 56 GB) lebih dari cukup untuk 10 user.
+Platform coding mandiri di VPS — VS Code di browser, multi-user, PostgreSQL + MySQL, untuk belajar bareng.
 
 ---
 
-## Yang Akan Kamu Dapatkan
+## File Apa Saja yang Di-Upload ke GitHub?
 
-Tiap user mendapat:
-- **VS Code di browser** (code-server) — editor yang sama persis dengan VS Code desktop
-- **Terminal bash** penuh di dalam browser
-- **Folder project pribadi** yang persistent
-- **Akses via HTTPS** di subdomain mereka: `https://namauser.domainmu.com`
+**Semua file di-upload, kecuali yang ada di `.gitignore`:**
+
+| Di-upload ✅ | TIDAK di-upload ❌ |
+|---|---|
+| `docker-compose.yml` | `.env` (berisi password!) |
+| `Dockerfile.portal` | `server/data/users.json` (berisi hash password) |
+| `nginx/nginx.conf` | `node_modules/` |
+| `scripts/*.sh` | |
+| `scripts/*.sql` | |
+| `server/**` (kode sumber) | |
+| `public/**` (tampilan) | |
+| `.env.example` (template, aman) | |
+| `setup-github.ps1` | |
+| `README.md` | |
 
 ---
 
-## Prasyarat
+## 🪟 Cara Upload ke GitHub (dari Windows — PowerShell)
 
-1. VPS dengan Ubuntu 22.04 LTS
-2. Domain yang DNS-nya bisa kamu kelola (misal lewat Cloudflare)
-3. Akses SSH ke VPS sebagai root atau user dengan sudo
+### Syarat awal
+1. Sudah install [Git for Windows](https://git-scm.com/download/win)
+2. Sudah punya akun GitHub dan buat repo baru (kosong, tanpa README)
 
----
+### Langkah-langkah
 
-## Cara Install (5 Langkah)
+**Buka PowerShell** di folder project ini, lalu jalankan:
 
-### Langkah 1 — Clone repo ke VPS
-```bash
-git clone https://github.com/USERNAMEMU/self-hosted-dev-platform
-cd self-hosted-dev-platform
+```powershell
+.\setup-github.ps1
 ```
 
-### Langkah 2 — Jalankan setup otomatis
-Script ini akan install Docker, Nginx, dan tools lainnya:
+Script akan tanya:
+- URL repo GitHub kamu (contoh: `https://github.com/namauser/dev-platform.git`)
+- Nama branch (default: `main`)
+- Pesan commit (bisa Enter saja)
+
+Setelah selesai, semua file terupload otomatis ke GitHub.
+
+### Kalau PowerShell blokir script
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\setup-github.ps1
+```
+
+---
+
+## 🖥️ Cara Install di VPS (dari SSH)
+
+### Syarat VPS
+- Ubuntu 22.04 LTS
+- Akses root / sudo via SSH
+- Domain yang sudah bisa kamu kelola DNS-nya
+
+### Cara 1: Installer otomatis (paling mudah)
+
+SSH ke VPS lalu jalankan **satu perintah** ini (ganti URL dengan repo GitHub kamu):
+
 ```bash
-chmod +x scripts/*.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/USERNAMEMU/NAMA-REPO/main/scripts/install-vps.sh)
+```
+
+Script akan tanya domain, email, password database, lalu setup semuanya otomatis.
+
+### Cara 2: Manual (lebih kontrol)
+
+```bash
+# 1. Login ke VPS via SSH
+ssh root@IP_VPS_KAMU
+
+# 2. Clone repo dari GitHub
+git clone https://github.com/USERNAMEMU/NAMA-REPO.git
+cd NAMA-REPO
+
+# 3. Jalankan setup sistem (install Docker, Nginx, firewall)
 sudo bash scripts/setup.sh
-```
 
-### Langkah 3 — Isi konfigurasi
-```bash
+# 4. Buat file konfigurasi
 cp .env.example .env
 nano .env
-```
+# Isi: DOMAIN, LETSENCRYPT_EMAIL, POSTGRES_PASSWORD, MYSQL_ROOT_PASSWORD, SESSION_SECRET
 
-Isi nilainya:
-```env
-DOMAIN=dev.domainmu.com          # Domain utama kamu
-LETSENCRYPT_EMAIL=email@mu.com   # Untuk HTTPS gratis
-PASSWORD=passwordKuat123          # Password default (per-user bisa beda)
-TZ=Asia/Jakarta
-```
+# 5. Jalankan semua service
+docker compose up -d --build
 
-### Langkah 4 — Jalankan service dasar
-```bash
-docker compose up -d
-```
-
-### Langkah 5 — Tambah user
-```bash
-# Format: sudo bash scripts/add-user.sh namauser
-sudo bash scripts/add-user.sh budi
-sudo bash scripts/add-user.sh siti
-sudo bash scripts/add-user.sh rafi
-```
-
-Setiap perintah akan:
-1. Membuat container VS Code khusus user tersebut
-2. Meng-generate password acak
-3. Menampilkan URL dan password akses mereka
-
----
-
-## Perintah Berguna
-
-```bash
-# Lihat semua user aktif
-bash scripts/list-users.sh
-
-# Tambah user baru
-sudo bash scripts/add-user.sh namauser
-
-# Hapus user
-sudo bash scripts/remove-user.sh namauser
-
-# Cek status semua container
+# 6. Cek semua container berjalan
 docker ps
-
-# Lihat log container user tertentu
-docker logs codeserver-budi
-
-# Restart container user tertentu
-docker restart codeserver-budi
 ```
 
----
-
-## Setup HTTPS per User
-
-Setelah menambah user dan mengarahkan DNS subdomain ke VPS:
+### Setelah service jalan
 
 ```bash
-# Pastikan DNS sudah propagated dulu (bisa cek di dnschecker.org)
+# Tambah user baru (format: username password port)
+sudo bash scripts/add-user.sh budi password123 8082
+sudo bash scripts/add-user.sh siti password456 8083
+
+# Setup HTTPS (setelah DNS subdomain diarahkan ke IP VPS)
+sudo certbot --nginx -d dev.domainmu.com
 sudo certbot --nginx -d budi.dev.domainmu.com
 sudo certbot --nginx -d siti.dev.domainmu.com
-```
 
-Certbot akan otomatis konfigurasi HTTPS di Nginx.
+# Lihat semua user aktif
+bash scripts/list-users.sh
+```
 
 ---
 
-## Pengaturan DNS (Cloudflare)
+## 🔑 Login Default
 
-Untuk tiap user, tambahkan A record:
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin` | `admin123` |
+| User | `user1` | `user1234` |
 
-| Type | Name | Content | Proxy |
+**Wajib ganti password setelah login pertama!**
+
+---
+
+## 🌐 Setup DNS (Cloudflare)
+
+Tambahkan A Record untuk setiap subdomain:
+
+| Type | Name | Content | Proxy Status |
 |---|---|---|---|
-| A | dev | IP_VPS_KAMU | Proxied |
-| A | budi.dev | IP_VPS_KAMU | DNS Only |
-| A | siti.dev | IP_VPS_KAMU | DNS Only |
+| A | `dev` | IP_VPS | Proxied ☁️ |
+| A | `*.dev` | IP_VPS | DNS Only (abu-abu) |
 
-> Gunakan **DNS Only** (tidak diproxy) untuk subdomain user agar SSL Certbot bisa bekerja.
-
----
-
-## Fitur Platform
-
-- ✅ VS Code lengkap di browser (extensions, IntelliSense, dll)
-- ✅ Terminal bash penuh
-- ✅ Bisa install bahasa apapun (Python, Node.js, Go, Java, dll)
-- ✅ HTTPS gratis via Let's Encrypt
-- ✅ Data user persistent (tidak hilang walau server restart)
-- ✅ Auto-update container (via Watchtower)
-- ✅ Web UI manajemen Docker (via Portainer)
-- ✅ Firewall otomatis dikonfigurasi
-- ✅ Mudah tambah/hapus user
+> Gunakan **DNS Only** untuk wildcard subdomain user agar Let's Encrypt bisa bekerja.
 
 ---
 
-## Estimasi Resource per User
+## 🗄️ Koneksi Database
 
-| Resource | Per User |
-|---|---|
-| RAM | ~512 MB – 2 GB (tergantung aktivitas) |
-| CPU | 0.5 – 1 core saat aktif coding |
-| Storage | Sesuai project mereka |
+### Dari VS Code terminal (di dalam VPS)
 
-Dengan 56 GB RAM, kamu bisa nyaman untuk 10 user aktif sekaligus.
-
----
-
-## Troubleshooting
-
-**Container tidak mau start:**
+**PostgreSQL:**
 ```bash
-docker logs codeserver-namauser
+psql -h devplatform-postgres -U namauser -d devplatform
 ```
 
-**HTTPS tidak jalan:**
+**MySQL:**
 ```bash
-sudo certbot renew --dry-run
-sudo nginx -t
-sudo systemctl reload nginx
+mysql -h devplatform-mysql -u namauser -p db_namauser
 ```
 
-**Port konflik:**
+### Dari laptop (via Cloudflare Tunnel)
+- Isi `CLOUDFLARE_TUNNEL_TOKEN` di `.env`
+- Buat tunnel di [dash.cloudflare.com/zero-trust](https://one.dash.cloudflare.com)
+- Gunakan host `db.dev.domainmu.com` di DBeaver/TablePlus/MySQL Workbench
+
+---
+
+## 🧑‍💻 Perintah Berguna
+
 ```bash
-sudo netstat -tulpn | grep 808
+# Lihat semua container
+docker ps
+
+# Restart portal
+docker restart devplatform-portal
+
+# Log portal
+docker logs devplatform-portal -f
+
+# Log user tertentu
+docker logs codeserver-budi -f
+
+# Backup database PostgreSQL
+docker exec devplatform-postgres pg_dump -U postgres devplatform > backup.sql
+
+# Backup database MySQL
+docker exec devplatform-mysql mysqldump -u root -p devplatform_shared > backup.sql
 ```
 
 ---
 
-## Keamanan
+## 📁 Struktur File Project
 
-- Setiap user punya password dan environment terisolasi
-- Firewall hanya buka port 22 (SSH), 80 (HTTP), 443 (HTTPS)
-- Fail2Ban aktif untuk mencegah brute-force SSH
-- HTTPS enforced (HTTP otomatis redirect ke HTTPS)
-- Password tiap user di-generate secara random
-
----
-
-## Lisensi
-
-Open source, bebas dipakai untuk belajar. Tidak untuk dijual kembali.
+```
+self-hosted-dev-platform/
+├── server/
+│   ├── index.js              # Server utama
+│   ├── data/                 # (tidak di-commit) users.json
+│   └── routes/               # auth, dashboard, admin, api
+├── public/
+│   ├── login.html            # Halaman login
+│   ├── dashboard.html        # Dashboard user
+│   └── admin.html            # Panel admin
+├── nginx/nginx.conf          # Reverse proxy
+├── scripts/
+│   ├── setup.sh              # Setup VPS
+│   ├── install-vps.sh        # Installer otomatis (one-liner)
+│   ├── add-user.sh           # Tambah user + setup DB
+│   ├── remove-user.sh        # Hapus user
+│   ├── list-users.sh         # List user aktif
+│   ├── create-project.sh     # Tambah folder project
+│   ├── init-postgres.sql     # Tabel contoh PostgreSQL
+│   └── init-mysql.sql        # Tabel contoh MySQL
+├── docker-compose.yml        # Semua service
+├── Dockerfile.portal         # Image portal
+├── setup-github.ps1          # Upload ke GitHub (Windows PowerShell)
+├── .env.example              # Template konfigurasi (aman di-commit)
+└── .gitignore                # File yang dikecualikan dari GitHub
+```

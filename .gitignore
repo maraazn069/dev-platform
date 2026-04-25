@@ -1,22 +1,33 @@
-# Environment variables (JANGAN pernah di-commit ke GitHub!)
+# ================================================================
+# .gitignore — File yang TIDAK diupload ke GitHub
+# ================================================================
+
+# --- WAJIB: Jangan pernah commit file ini! ---
 .env
+server/data/users.json
 
-# Konfigurasi user lokal (berisi password!)
-scripts/users/
-/opt/
-
-# Node modules
+# Node modules (diinstall ulang via npm install)
 node_modules/
+
+# Data runtime (dibuat otomatis di VPS)
+server/data/*.json
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Editor
-.vscode/
+.vscode/settings.json
 *.swp
 *.swo
+*~
 
 # Logs
 *.log
 logs/
+npm-debug.log*
+
+# Build output
+dist/
+build/
