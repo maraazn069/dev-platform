@@ -1,0 +1,24 @@
+gamerqu1@Potato:~/dev-platform$ # Stop Nginx sistem (karena Docker yang handle)
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+
+# Restart container nginx-proxy
+cd ~/dev-platform
+sudo docker compose up -d nginx
+Synchronizing state of nginx.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install disable nginx
+Removed "/etc/systemd/system/multi-user.target.wants/nginx.service".
+WARN[0000] /home/gamerqu1/dev-platform/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+[+] up 2/2
+ ✔ Container devplatform-portal Running                                                                             0.0s
+ ✔ Container nginx-proxy        Started                                                                             0.1s
+gamerqu1@Potato:~/dev-platform$ sudo docker ps
+CONTAINER ID   IMAGE                           COMMAND                  CREATED              STATUS                          PORTS                                          NAMES
+ef78a012218b   adminer:latest                  "entrypoint.sh docke…"   About a minute ago   Up 59 seconds                   127.0.0.1:8888->8080/tcp                       devplatform-adminer
+b74e845f4218   nginx:alpine                    "/docker-entrypoint.…"   About a minute ago   Up 4 seconds                                                                   nginx-proxy
+1a0c025aebd4   postgres:15-alpine              "docker-entrypoint.s…"   About a minute ago   Up 59 seconds (healthy)         127.0.0.1:5432->5432/tcp                       devplatform-postgres
+7386eb72d519   portainer/portainer-ce:latest   "/portainer"             About a minute ago   Up 59 seconds                   8000/tcp, 9443/tcp, 127.0.0.1:9000->9000/tcp   portainer
+6e8f134ac447   mysql:8.0                       "docker-entrypoint.s…"   About a minute ago   Up 59 seconds (healthy)         127.0.0.1:3306->3306/tcp, 33060/tcp            devplatform-mysql
+c4c4a84f7fc2   dev-platform-portal             "docker-entrypoint.s…"   About a minute ago   Up 59 seconds                   0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp    devplatform-portal
+30168b3ffde1   containrrr/watchtower           "/watchtower --inter…"   About a minute ago   Restarting (1) 23 seconds ago                                                  watchtower
+gamerqu1@Potato:~/dev-platform$
