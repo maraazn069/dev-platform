@@ -108,7 +108,7 @@ router.get('/users/status', requireAdmin, (req, res) => {
 
 router.get('/db/info', requireAuth, (req, res) => {
   const username = req.session.user.username;
-  const domain = process.env.DOMAIN || 'dev.example.com';
+  const domain = process.env.DOMAIN || 'netprem.org';
   const proto = process.env.PROTOCOL || 'http';
   const creds = userManager.getCredentials(username) || {};
 
@@ -167,13 +167,42 @@ router.delete('/databases/:type/:name', requireAuth, (req, res) => {
 
 // ===== Project management (per user) =====
 
+// Subdomain reserved — gak boleh tabrakan dengan service global di apex.
+const RESERVED_SUBDOMAINS = new Set([
+  'www', 'mail', 'mysql', 'postgres', 'pgadmin', 'phpmyadmin',
+  'files', 'admin', 'api', 'preview', 'app'
+]);
+
+function slugify(name) {
+  const raw = String(name || '').toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!raw) return 'app';
+
+  // Append 4-char hash supaya nama panjang yg di-truncate gak collide.
+  // Juga supaya project bernama 'mysql' (reserved) gak konflik.
+  const crypto = require('crypto');
+  const hash = crypto.createHash('md5').update(name + '').digest('hex').slice(0, 4);
+  let slug = raw.slice(0, 40);
+
+  // Kalau hasil truncate cocok original full, gak perlu hash.
+  // Kalau truncated ATAU reserved, append hash.
+  if (slug !== raw || RESERVED_SUBDOMAINS.has(slug)) {
+    slug = (slug.slice(0, 35) + '-' + hash).replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  return slug || 'app';
+}
+
 router.get('/my/projects', requireAuth, (req, res) => {
   const username = req.session.user.username;
-  const domain = process.env.DOMAIN || 'dev.example.com';
+  const domain = process.env.DOMAIN || 'netprem.org';
   const proto = process.env.PROTOCOL || 'http';
   const projects = projectManager.listProjects(username).map(p => ({
     ...p,
-    url: `${proto}://${username}.${domain}/?folder=/config/projects/${encodeURIComponent(p.name)}`
+    url: `${proto}://${username}.${domain}/?folder=/config/projects/${encodeURIComponent(p.name)}`,
+    // OPSI C: preview URL untuk dev server di port 3000 dalam container.
+    // User jalankan `npm run dev` / `python -m http.server 3000` di project, lalu buka URL ini.
+    previewUrl: `${proto}://${slugify(p.name)}.${username}.${domain}`
   }));
   res.json({
     projects,
@@ -250,7 +279,7 @@ router.get('/launch/phpmyadmin', requireAuth, (req, res) => {
     return res.status(404).send('Credentials MySQL belum di-generate. Minta admin untuk repair-db.');
   }
 
-  const domain = process.env.DOMAIN || 'dev.example.com';
+  const domain = process.env.DOMAIN || 'netprem.org';
   const proto = process.env.PROTOCOL || 'http';
   const targetDb = req.query.db ? userManager.safeDbName(username, req.query.db) : `${username}_default`;
   const phpUrl = `${proto}://mysql.${domain}/`;
@@ -329,7 +358,7 @@ router.get('/launch/pgadmin', requireAuth, (req, res) => {
     return res.status(404).send('Credentials PostgreSQL belum di-generate. Minta admin untuk repair-db.');
   }
 
-  const domain = process.env.DOMAIN || 'dev.example.com';
+  const domain = process.env.DOMAIN || 'netprem.org';
   const proto = process.env.PROTOCOL || 'http';
   const pgadminUrl = `${proto}://pgadmin.${domain}`;
   const dbName = `${username}_default`;
@@ -411,7 +440,7 @@ router.get('/projects/:username', requireAuth, (req, res) => {
   const user = users.find(u => u.username === username);
   if (!user) return res.status(404).json({ error: 'User tidak ditemukan' });
 
-  const domain = process.env.DOMAIN || 'dev.example.com';
+  const domain = process.env.DOMAIN || 'netprem.org';
   const protocol = process.env.PROTOCOL || 'http';
 
   // Pakai project list dari filesystem (sumber kebenaran), fallback ke users.json

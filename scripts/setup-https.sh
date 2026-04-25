@@ -44,6 +44,12 @@ echo -e "Domain utama   : ${YELLOW}$DOMAIN${NC}"
 echo -e "Wildcard       : ${YELLOW}*.$DOMAIN${NC}"
 echo -e "Email          : ${YELLOW}$LETSENCRYPT_EMAIL${NC}"
 echo ""
+if [[ "$DOMAIN" == dev.* ]] || [[ "$DOMAIN" == *.*.*.* ]]; then
+  echo -e "${YELLOW}⚠ Catatan: untuk struktur Opsi C (preview project di <project>.<user>.DOMAIN),${NC}"
+  echo -e "${YELLOW}  pakai DOMAIN apex (contoh: netprem.org), BUKAN sub-domain (dev.netprem.org).${NC}"
+  echo -e "${YELLOW}  Kalau lanjut sekarang, fitur preview project per-user gak akan jalan.${NC}"
+  echo ""
+fi
 
 # Install certbot dan plugin Cloudflare
 echo -e "${CYAN}Install certbot + plugin Cloudflare...${NC}"
@@ -99,8 +105,10 @@ http {
         return 301 https://$host$request_uri;
     }
 
+    # Portal apex
     server {
         listen 443 ssl;
+        http2 on;
         server_name __DOMAIN__;
 
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
@@ -126,38 +134,32 @@ http {
 
     server {
         listen 443 ssl;
+        http2 on;
         server_name mysql.__DOMAIN__;
         client_max_body_size 256M;
-
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
         ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
-
         location / {
             set $upstream_pma "devplatform-phpmyadmin:80";
             proxy_pass http://$upstream_pma;
             proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
         }
     }
 
     server {
         listen 443 ssl;
+        http2 on;
         server_name pgadmin.__DOMAIN__;
         client_max_body_size 50M;
-
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
         ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
-
         location / {
             set $upstream_pga "devplatform-pgadmin:80";
             proxy_pass http://$upstream_pga;
             proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
             proxy_set_header X-Script-Name "";
         }
@@ -165,28 +167,31 @@ http {
 
     server {
         listen 443 ssl;
+        http2 on;
         server_name files.__DOMAIN__;
         client_max_body_size 2048M;
-
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
         ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
-
         location / {
             set $upstream_fb "devplatform-filebrowser:80";
             proxy_pass http://$upstream_fb;
             proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
             proxy_read_timeout 600s;
             proxy_send_timeout 600s;
         }
     }
 
+    # OPSI C: per-user subdomain & project preview di-include dari per-user file.
+    # Generated otomatis oleh portal (server/services/nginxManager.js → ensureUserConfig).
+    # Fallback: kalau user.conf belum ada, regex di bawah handle <user>.DOMAIN dgn cert wildcard.
+    include /etc/nginx/users/*.conf;
+
     server {
         listen 443 ssl;
-        server_name ~^(?<username>[a-z][a-z0-9]+)\.__DOMAIN__$;
+        http2 on;
+        server_name ~^(?<username>[a-z][a-z0-9_]+)\.__DOMAIN__$;
 
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
         ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;

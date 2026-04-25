@@ -17,14 +17,28 @@ if [ ! -f "$SCRIPT_PATH" ]; then
   exit 1
 fi
 
-CRON_LINE="0 2 * * * cd $PROJECT_DIR && bash $SCRIPT_PATH >> $LOG_PATH 2>&1"
+BACKUP_CRON="0 2 * * * cd $PROJECT_DIR && bash $SCRIPT_PATH >> $LOG_PATH 2>&1"
 
-# Add ke root crontab kalau belum ada
-( crontab -l 2>/dev/null | grep -v "backup-to-r2.sh" ; echo "$CRON_LINE" ) | crontab -
+# Cert queue worker — jalan tiap 5 menit, request *.<user>.DOMAIN cert untuk
+# user baru yg di-queue oleh portal di server/data/cert-queue.txt.
+CERT_WORKER="$PROJECT_DIR/scripts/cert-queue-worker.sh"
+CERT_LOG="/var/log/devplatform-cert-queue.log"
+CERT_CRON="*/5 * * * * cd $PROJECT_DIR && bash $CERT_WORKER >> $CERT_LOG 2>&1"
 
-echo "✅ Cron terpasang. Backup otomatis tiap hari jam 02:00."
-echo "   Log: $LOG_PATH"
-echo "   Cek crontab: crontab -l"
+# Add ke root crontab (replace baris lama kalau ada)
+( crontab -l 2>/dev/null \
+  | grep -v "backup-to-r2.sh" \
+  | grep -v "cert-queue-worker.sh" \
+  ; echo "$BACKUP_CRON" \
+  ; [ -f "$CERT_WORKER" ] && echo "$CERT_CRON" \
+) | crontab -
+
+echo "✅ Cron terpasang:"
+echo "   - Backup R2:   tiap hari 02:00 → $LOG_PATH"
+[ -f "$CERT_WORKER" ] && echo "   - Cert queue:  tiap 5 menit → $CERT_LOG"
 echo ""
-echo "Test manual sekarang:"
+echo "Cek crontab: crontab -l"
+echo ""
+echo "Test manual:"
 echo "  sudo bash $SCRIPT_PATH"
+[ -f "$CERT_WORKER" ] && echo "  sudo bash $CERT_WORKER"

@@ -403,3 +403,57 @@ Saat user `git pull` di VPS lama, untuk dapat fitur baru:
    atau manual `ufw delete allow 3306` dan tambah whitelist per IP
 7. Login admin → akan otomatis diminta ganti password (mustChangePassword migrasi
    runtime untuk user yang belum punya `passwordChangedAt`)
+
+## Update Sesi (Apr 25 — Round 2: Opsi C Subdomain Restructure) ⭐
+
+### Struktur Subdomain Baru (Opsi C)
+- **Portal**: `https://netprem.org` (apex) — sebelumnya `dev.netprem.org`
+- **VS Code per user**: `https://<user>.netprem.org`
+- **Preview project**: `https://<project>.<user>.netprem.org` (nested wildcard depth-2)
+   → semua project route ke port **3000** dalam container user (konvensi)
+   → user jalankan SATU dev server di port 3000 (npm run dev / python -m http.server 3000 / dst)
+
+### Cert Strategy
+- `*.netprem.org` (depth-1) — wildcard biasa, di-issue via `setup-https.sh`
+- `*.<user>.netprem.org` (depth-2) — per-user wildcard, di-issue via `provision-user-cert.sh`
+- Cert per-user request via DNS-01 challenge (Cloudflare) — pakai cloudflare.ini yang sudah ada
+- LE rate limit: 50/week — fine untuk ≤10 user
+
+### File Baru
+- `server/services/nginxManager.js` — `ensureUserConfig(username)` & `removeUserConfig(username)`:
+   tulis `/app/nginx/users/<user>.conf` dengan blok depth-1 (code-server) + depth-2 (preview).
+   Detect cert per-user otomatis; fallback wildcard kalau belum ada.
+- `scripts/provision-user-cert.sh <user>` — request cert *.<user>.DOMAIN via certbot DNS-01.
+- `scripts/cert-queue-worker.sh` — cron worker (tiap 5 menit) yang baca
+   `server/data/cert-queue.txt` dan request cert untuk user yang belum punya.
+- `scripts/migrate-to-opsi-c.sh` — one-shot migrator: re-issue cert, regenerate nginx.conf
+   dengan include directive, loop user untuk request per-user cert + tulis user.conf.
+- `nginx/users/` (folder) — tempat per-user nginx conf, mounted ke nginx container `:ro`.
+
+### File Modified
+- `server/services/userManager.js` — `provisionUser` queue cert request ke
+   `server/data/cert-queue.txt`; `removeUser` panggil `nginxManager.removeUserConfig`.
+- `server/routes/api.js` — DOMAIN default `'netprem.org'`; project list expose `previewUrl`
+   field (`<project-slug>.<user>.<DOMAIN>`).
+- `public/dashboard.html` — project card tampilkan link preview URL dengan label
+   "🌐 Preview (port 3000)".
+- `docker-compose.yml` — mount `./nginx/users:/etc/nginx/users:ro` ke nginx +
+   `./nginx/users:/app/nginx/users` (rw) ke portal.
+- `scripts/setup-https.sh` — nginx.conf template pakai `include /etc/nginx/users/*.conf`,
+   regex user-block jadi fallback aja, http2 directive separate dari listen.
+- `scripts/install-backup-cron.sh` — tambah cert-queue cron entry.
+- `PERINTAH.md` — section 13E baru: panduan migrasi Opsi C lengkap.
+
+### Cara Pakai (User Flow)
+1. User login portal → buka project dari dashboard
+2. Di terminal VS Code: `cd ~/projects/myapp && npm run dev` (atau `python -m http.server 3000`)
+3. Klik link preview di card project → buka `https://myapp.<user>.netprem.org`
+4. Catatan: kalau jalankan 2 project bersamaan, perlu kill yang satu dulu
+   (port 3000 cuma satu per container)
+
+### Worker Lifecycle
+- User dibuat di portal → username masuk ke `cert-queue.txt`
+- Cron host (tiap 5 menit) jalanin `cert-queue-worker.sh`
+- Worker: dedup queue → loop request `provision-user-cert.sh` → kalau sukses, file user.conf
+  di-regenerate next time admin klik 🔧 Repair Container ATAU portal restart
+- Kalau gagal, username re-queued (retry tiap 5 menit sampai sukses)

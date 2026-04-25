@@ -46,6 +46,7 @@ services:
       - /opt/devplatform/data:/opt/devplatform/data
       - /opt/devplatform/backups:/opt/devplatform/backups
       - ./nginx/nginx.conf:/app/nginx/nginx.conf
+      - ./nginx/users:/app/nginx/users
       - ./.env:/app/.env
       - ./docker-compose.yml:/app/docker-compose.yml:ro
     networks:
@@ -73,6 +74,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/users:/etc/nginx/users:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - devplatform

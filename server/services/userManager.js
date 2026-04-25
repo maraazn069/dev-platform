@@ -209,6 +209,17 @@ function provisionUser({ username, password, displayName, email }) {
   const r6 = nginxManager.ensureUserSubdomain(username);
   if (!r6.success) errors.push('nginx: ' + r6.message);
 
+  // 4a) OPSI C: queue request cert *.<user>.DOMAIN.
+  // Portal container gak punya certbot — tulis username ke cert-queue.txt;
+  // cron di host (cert-queue-worker.sh, jalan tiap 5 menit) akan pickup & request cert.
+  try {
+    const queueFile = path.join(__dirname, '../data/cert-queue.txt');
+    fs.appendFileSync(queueFile, username + '\n');
+    console.log(`[provisionUser] queued cert request for ${username}`);
+  } catch (e) {
+    console.warn(`[provisionUser] gagal queue cert: ${e.message}`);
+  }
+
   // 4b) pgAdmin user (synthetic email, password = pgPassword biar konsisten)
   // Ini fire-and-forget; gagal != block provision (admin bisa repair nanti).
   const pgAdminEmail = (email || '').includes('@') ? email : `${username}@netprem.local`;
@@ -303,6 +314,16 @@ function removeUser(username) {
   try {
     fs.rmSync(`${USER_DATA_BASE}/${username}`, { recursive: true, force: true });
   } catch (e) { errors.push('rm data dir: ' + e.message); }
+
+  // 5a) OPSI C: hapus per-user nginx conf (kalau ada). Cert per-user sengaja TIDAK
+  // di-revoke supaya kalau user di-readd tidak kena LE rate limit; cert akan auto-expire.
+  try {
+    const r7 = nginxManager.removeUserConfig(username);
+    if (!r7.success) errors.push('nginx user-conf: ' + r7.message);
+  } catch (e) {
+    // Non-fatal: file mungkin gak ada (user lama belum kepakai Opsi C).
+    console.log(`[removeUser] nginx user-conf cleanup skip: ${e.message}`);
+  }
 
   // 6) Only remove from users.json if all destructive steps succeeded.
   //    Otherwise mark deletionPending so admin can retry safely.

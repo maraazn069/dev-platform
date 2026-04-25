@@ -423,6 +423,11 @@
             <div class="project-name">${escHtml(p.name)}</div>
             <div class="project-meta">${fmtBytes(p.sizeKb)} · klik buka VS Code →</div>
           </a>
+          ${p.previewUrl ? `
+          <div style="margin-top:8px;padding:6px 8px;background:#0d1117;border:1px solid #21262d;border-radius:6px;">
+            <div style="font-size:.65rem;color:#8b949e;margin-bottom:2px;">🌐 Preview (port 3000)</div>
+            <a href="${escHtml(p.previewUrl)}" target="_blank" style="font-size:.72rem;color:#58a6ff;word-break:break-all;text-decoration:none;">${escHtml(p.previewUrl)}</a>
+          </div>` : ''}
           <div style="display:flex;gap:6px;margin-top:10px;border-top:1px solid #21262d;padding-top:10px;">
             <button class="btn-outline" style="padding:4px 10px;font-size:.72rem;flex:1;" onclick="openRenameProject('${escHtml(p.name)}')">✏️ Rename</button>
             <button class="btn-danger" style="flex:1;" onclick="openDeleteProject('${escHtml(p.name)}')">🗑️ Hapus</button>

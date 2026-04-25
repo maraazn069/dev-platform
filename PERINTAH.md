@@ -1210,6 +1210,83 @@ RESTORE_FROM_HOST=potato-old sudo bash scripts/restore-from-r2.sh
 # Selesai. Login portal: https://<DOMAIN>/
 ```
 
+## 1️⃣3️⃣E Migrasi ke Struktur Subdomain Lengkap (Opsi C)
+
+> Cuma perlu **sekali** kalau VPS lama-mu masih pakai struktur lama
+> (`dev.netprem.org` sebagai DOMAIN). Skip kalau install baru — `install-vps.sh`
+> sudah pakai struktur Opsi C dari awal.
+
+### Apa Itu Opsi C?
+- **Portal**: `https://netprem.org` (apex)
+- **VS Code per user**: `https://<user>.netprem.org`
+- **Preview project**: `https://<project>.<user>.netprem.org`
+   → semua route ke port **3000** dalam container user
+   → user jalankan `npm run dev` / `python -m http.server 3000` / dst di project
+- **Cert**: `*.netprem.org` (depth-1) + per-user `*.<user>.netprem.org` (depth-2)
+- DNS Cloudflare yang harus dipasang:
+  - `netprem.org` A → IP VPS (apex)
+  - `*.netprem.org` A → IP VPS
+  - **per user**: `*.<user>.netprem.org` A → IP VPS  *(satu CNAME wildcard nested per user)*
+
+### Langkah Migrasi
+
+```bash
+# 1) Backup dulu (WAJIB!)
+cd /opt/devplatform
+sudo bash scripts/backup-to-r2.sh
+
+# 2) Update DNS Cloudflare
+#    - netprem.org A → IP VPS (kalau belum)
+#    - *.netprem.org A → IP VPS (kalau belum)
+#    Tambahan:
+#    - Per user yg ada (cek di admin panel): *.<user>.netprem.org A → IP VPS
+#    Proxy boleh ON, tapi cert request ke LE perlu DNS-01 → token Cloudflare jalan via API.
+
+# 3) Update .env DOMAIN ke apex
+sudo nano .env
+# Pastikan: DOMAIN=netprem.org   (bukan dev.netprem.org)
+
+# 4) Jalankan migrator
+sudo bash scripts/migrate-to-opsi-c.sh
+# Script akan:
+#   - Re-issue *.netprem.org cert (kalau belum ada)
+#   - Mount nginx/users folder ke nginx container
+#   - Regenerate nginx.conf dengan include /etc/nginx/users/*.conf
+#   - Loop user: request *.<user>.netprem.org cert + tulis user.conf
+#   - Restart nginx + portal
+
+# 5) Pasang cert-queue worker (auto issue cert kalau ada user baru)
+sudo bash scripts/install-backup-cron.sh
+```
+
+### Verifikasi
+- Portal: `https://netprem.org` → halaman login
+- User test: `https://<user>.netprem.org` → VS Code
+- Preview: jalankan `python3 -m http.server 3000` di terminal VS Code,
+   buka `https://app.<user>.netprem.org` (kalau project namanya "app")
+
+### Cert Per-User Manual (Kalau Cron Belum Aktif / Mau Buru-Buru)
+
+```bash
+sudo bash scripts/provision-user-cert.sh alice
+# Output: cert *.alice.netprem.org diterbitkan
+# Trigger admin panel klik 🔧 Repair Container untuk regenerate alice.conf
+```
+
+### Catatan Limit Let's Encrypt
+- LE rate limit: **50 cert/registered-domain/week**.
+- Kalau punya 10 user → cuma 10 cert depth-2 + 1 cert wildcard depth-1 = 11 issuance, AMAN.
+- Cert auto-renew tiap 60 hari (oleh certbot timer).
+
+### Rollback ke Struktur Lama
+Kalau ada masalah, balik ke `dev.<DOMAIN>` style:
+1. Restore .env DOMAIN lama
+2. `sudo bash scripts/setup-https.sh` (regenerate nginx.conf tanpa include)
+3. Hapus mount `nginx/users` dari docker-compose.yml secara manual
+4. `sudo docker compose up -d nginx portal`
+
+---
+
 ### Update Fitur Tanpa Kehilangan Data
 
 ```bash
