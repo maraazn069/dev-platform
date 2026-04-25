@@ -160,7 +160,12 @@ ssh -L 3306:localhost:3306 user@vps-ip
 ```
 Setelah tunnel jalan, pakai DBeaver/TablePlus/MySQL Workbench dengan host `localhost`.
 
-Atau buka **Adminer** di browser: `https://db-admin.DOMAIN`
+### Web UI Database (gaya cPanel)
+
+| Tool | URL | Untuk |
+|------|-----|-------|
+| 🐬 **phpMyAdmin** | `https://mysql.DOMAIN` | MySQL — UI lengkap untuk query, import/export, manage user, dll |
+| 🐘 **pgAdmin** | `https://pgadmin.DOMAIN` | PostgreSQL — UI lengkap dengan query editor, ER diagram, dll |
 
 ---
 

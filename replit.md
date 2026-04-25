@@ -118,3 +118,15 @@ sudo bash scripts/add-user.sh namauser password123
 
 ### Field User Baru
 - `email` ditambah ke users.json schema (default kosong, opsional)
+
+## Update Sesi (Apr 25 - Lanjutan)
+### Ganti Adminer → phpMyAdmin + pgAdmin
+- **phpMyAdmin** (gaya cPanel) untuk MySQL → `https://mysql.DOMAIN`
+  - Auto-connect ke `devplatform-mysql`, upload limit 256M
+- **pgAdmin** untuk PostgreSQL → `https://pgadmin.DOMAIN`
+  - Login dengan email + password (di-set saat install, default admin@local.dev / random)
+  - Volume `pgadmin_data` untuk menyimpan koneksi tersimpan
+- Nginx route baru: `mysql.DOMAIN` & `pgadmin.DOMAIN` (HTTP + HTTPS)
+- Wildcard cert `*.DOMAIN` cover otomatis
+- UI portal & dashboard tampilkan tombol "🚀 Buka phpMyAdmin/pgAdmin"
+- `.env` baru: `PGADMIN_EMAIL`, `PGADMIN_PASSWORD`

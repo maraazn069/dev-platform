@@ -111,7 +111,8 @@ router.get('/db/info', requireAuth, (req, res) => {
     },
     access: {
       from_codeserver: 'Langsung connect pakai hostname container di atas',
-      from_browser: 'Buka Adminer di db-admin.' + (process.env.DOMAIN || 'domain-kamu'),
+      pgadmin_url: 'pgadmin.' + (process.env.DOMAIN || 'domain-kamu'),
+      phpmyadmin_url: 'mysql.' + (process.env.DOMAIN || 'domain-kamu'),
       from_laptop: 'SSH tunnel: ssh -L 5432:localhost:5432 user@vps-ip'
     }
   });

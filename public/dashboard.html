@@ -264,6 +264,7 @@
       const db = await res.json();
       const grid = document.getElementById('dbGrid');
 
+      const proto = window.location.protocol;
       grid.innerHTML = `
         <div class="card">
           <h4><span class="tag tag-pg">PostgreSQL</span></h4>
@@ -276,6 +277,7 @@
           </div>
           <p style="margin-top:10px;">${db.postgresql.note}</p>
           <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;margin-top:8px;font-family:monospace;font-size:0.75rem;color:#7ee787;overflow-x:auto;">${db.postgresql.example}</div>
+          <a href="${proto}//${db.access.pgadmin_url}" target="_blank" style="display:inline-block;margin-top:10px;background:#1f6feb;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-size:0.82rem;font-weight:600;">🚀 Buka pgAdmin</a>
         </div>
         <div class="card">
           <h4><span class="tag tag-mysql">MySQL</span></h4>
@@ -287,6 +289,7 @@
           </div>
           <p style="margin-top:10px;">${db.mysql.note}</p>
           <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;margin-top:8px;font-family:monospace;font-size:0.75rem;color:#7ee787;overflow-x:auto;">${db.mysql.example}</div>
+          <a href="${proto}//${db.access.phpmyadmin_url}" target="_blank" style="display:inline-block;margin-top:10px;background:#f0883e;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-size:0.82rem;font-weight:600;">🚀 Buka phpMyAdmin</a>
         </div>
       `;
     }

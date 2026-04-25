@@ -125,16 +125,38 @@ http {
 
     server {
         listen 443 ssl;
-        server_name db-admin.__DOMAIN__;
+        server_name mysql.__DOMAIN__;
+        client_max_body_size 256M;
 
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
         ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
 
         location / {
-            proxy_pass http://devplatform-adminer:8080;
+            proxy_pass http://devplatform-phpmyadmin:80;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+        }
+    }
+
+    server {
+        listen 443 ssl;
+        server_name pgadmin.__DOMAIN__;
+        client_max_body_size 50M;
+
+        ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+
+        location / {
+            proxy_pass http://devplatform-pgadmin:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Script-Name "";
         }
     }
 
@@ -205,7 +227,8 @@ echo "  ✓ HTTPS berhasil dikonfigurasi!"
 echo "  ================================================"
 echo -e "${NC}"
 echo -e "  Portal    : ${CYAN}https://$DOMAIN${NC}"
-echo -e "  DB Admin  : ${CYAN}https://db-admin.$DOMAIN${NC}"
+echo -e "  phpMyAdmin: ${CYAN}https://mysql.$DOMAIN${NC}"
+echo -e "  pgAdmin   : ${CYAN}https://pgadmin.$DOMAIN${NC}"
 echo -e "  User VS Code: ${CYAN}https://USERNAME.$DOMAIN${NC}"
 echo ""
 echo -e "  Semua subdomain user langsung dapat HTTPS (wildcard cert)"

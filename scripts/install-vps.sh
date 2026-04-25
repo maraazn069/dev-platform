@@ -62,6 +62,12 @@ if [ -z "$PG_PASS" ]; then PG_PASS=$(openssl rand -base64 20); fi
 read -p "$(echo -e ${YELLOW})Password MySQL root (Enter untuk auto-generate): $(echo -e ${NC})" MYSQL_ROOT_PASS
 if [ -z "$MYSQL_ROOT_PASS" ]; then MYSQL_ROOT_PASS=$(openssl rand -base64 20); fi
 
+read -p "$(echo -e ${YELLOW})Email login pgAdmin (Enter untuk admin@local.dev): $(echo -e ${NC})" PGADMIN_EMAIL
+if [ -z "$PGADMIN_EMAIL" ]; then PGADMIN_EMAIL="admin@local.dev"; fi
+
+read -p "$(echo -e ${YELLOW})Password pgAdmin (Enter untuk auto-generate): $(echo -e ${NC})" PGADMIN_PASSWORD
+if [ -z "$PGADMIN_PASSWORD" ]; then PGADMIN_PASSWORD=$(openssl rand -base64 16); fi
+
 MYSQL_PASS=$(openssl rand -base64 16)
 SESSION_SECRET=$(openssl rand -base64 32)
 
@@ -155,6 +161,10 @@ POSTGRES_PASSWORD=$PG_PASS
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASS
 MYSQL_PASSWORD=$MYSQL_PASS
 
+# pgAdmin (web UI PostgreSQL)
+PGADMIN_EMAIL=$PGADMIN_EMAIL
+PGADMIN_PASSWORD=$PGADMIN_PASSWORD
+
 # Direktori data
 DATA_DIR=/opt/devplatform/data
 EOF
@@ -192,12 +202,30 @@ http {
 
     server {
         listen 80;
-        server_name db-admin.__DOMAIN__;
+        server_name mysql.__DOMAIN__;
+        client_max_body_size 256M;
 
         location / {
-            proxy_pass http://devplatform-adminer:8080;
+            proxy_pass http://devplatform-phpmyadmin:80;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name pgadmin.__DOMAIN__;
+        client_max_body_size 50M;
+
+        location / {
+            proxy_pass http://devplatform-pgadmin:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Script-Name "";
         }
     }
 
@@ -250,6 +278,12 @@ echo ""
 echo -e "${BOLD}Kredensial Database (simpan baik-baik!):${NC}"
 echo -e "  PostgreSQL password : ${YELLOW}$PG_PASS${NC}"
 echo -e "  MySQL root password : ${YELLOW}$MYSQL_ROOT_PASS${NC}"
+echo ""
+echo -e "${BOLD}Web UI Database:${NC}"
+echo -e "  phpMyAdmin (MySQL)  : ${CYAN}https://mysql.$DOMAIN${NC}  (root / $MYSQL_ROOT_PASS)"
+echo -e "  pgAdmin (PostgreSQL): ${CYAN}https://pgadmin.$DOMAIN${NC}"
+echo -e "    Login email     : ${YELLOW}$PGADMIN_EMAIL${NC}"
+echo -e "    Login password  : ${YELLOW}$PGADMIN_PASSWORD${NC}"
 echo ""
 echo -e "${YELLOW}Langkah selanjutnya (HTTPS):${NC}"
 echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"
