@@ -793,14 +793,25 @@ Web UI untuk admin browse, upload, download, edit, dan hapus file di
 - Cek penggunaan disk per folder
 
 **Reset password admin filebrowser kalau lupa:**
-```bash
-# Akses container
-sudo docker exec -it devplatform-filebrowser sh
 
-# Reset password admin
-filebrowser users update admin --password "PasswordBaruKuat123" \
+⚠️ JANGAN pakai `docker exec` — image filebrowser:s6 mengunci database, bakal `Error: timeout`. Pakai cara ini:
+```bash
+cd ~/dev-platform
+
+# 1. Stop filebrowser (lepas lock database)
+sudo docker compose stop filebrowser
+
+# 2. Update password via container sementara yang mount volume yang sama
+sudo docker run --rm \
+  -v dev-platform_filebrowser_db:/database \
+  filebrowser/filebrowser:s6 \
+  /filebrowser users update admin --password "PasswordBaruKuat123" \
   --database /database/filebrowser.db
-exit
+
+# 3. Start lagi filebrowser
+sudo docker compose start filebrowser
+sleep 3
+sudo docker logs devplatform-filebrowser --tail 5
 ```
 
 **Tambah user kedua di filebrowser** (mis. read-only viewer):
