@@ -201,6 +201,48 @@ Setelah reinstall:
 
 ---
 
+### 🆘 Opsi nginx-FIX — nginx-proxy stuck "Restarting" / browser ERR_CONNECTION_REFUSED
+Kalau install sukses tapi `dev.netprem.org` browser nya **ERR_CONNECTION_REFUSED**,
+biasanya nginx-proxy crash di startup karena coba resolve hostname container yg
+belum siap. Cek dulu:
+```bash
+sudo docker ps | grep nginx-proxy        # status: harus "Up", bukan "Restarting"
+sudo docker logs nginx-proxy --tail 30   # cek error message
+```
+Kalau lihat error `host not found in upstream "devplatform-..."` → itu bug DNS
+resolution. **Fix permanen sudah ada di script terbaru** (pakai variable proxy_pass).
+Jalankan:
+```bash
+cd ~/dev-platform
+git pull origin main
+
+# Re-generate nginx config dengan template baru (tanpa hapus data!)
+# Cara paling cepat: hapus file nginx config + restart nginx
+sudo rm -f nginx/nginx.conf
+
+# Re-generate nginx.conf dari template (extract dari install-vps.sh tanpa hapus apa-apa)
+DOMAIN=$(grep "^DOMAIN=" .env | cut -d= -f2)
+sudo bash -c "sed -n '/cat > nginx\/nginx.conf << .NGINXEOF./,/^NGINXEOF$/p' scripts/install-vps.sh | sed '1d;\$d' | sed 's|__DOMAIN__|$DOMAIN|g' > nginx/nginx.conf"
+
+# Restart nginx
+sudo docker compose restart nginx
+sudo docker ps | grep nginx-proxy        # harus "Up", bukan "Restarting"
+sudo docker logs nginx-proxy --tail 10   # tidak boleh ada error
+
+# Tes akses
+curl -I http://dev.netprem.org           # harus 200 atau 301
+```
+
+**Atau cara paling sederhana — re-run install-vps.sh** (data DB & user TIDAK hilang
+karena volume tetap aman, kecuali kakak `compose down -v`):
+```bash
+cd ~/dev-platform
+git pull origin main
+sudo bash scripts/install-vps.sh    # akan overwrite nginx.conf dengan versi terbaru
+```
+
+---
+
 ### 🆘 Opsi B-FIX — Recovery dari Error "Bad source address" / ".env tidak ditemukan"
 Kalau `install-vps.sh` gagal di tengah dengan pesan **`ERROR: Bad source address`**
 lalu lanjut **`File .env tidak ditemukan`**, itu karena IP yang kakak input untuk

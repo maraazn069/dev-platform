@@ -273,6 +273,9 @@ events {
 }
 
 http {
+    # Pakai Docker internal DNS supaya hostname container di-resolve
+    # SAAT REQUEST datang, bukan saat nginx startup (mencegah crash kalau
+    # container upstream belum siap saat boot).
     resolver 127.0.0.11 valid=30s ipv6=off;
 
     server {
@@ -282,7 +285,8 @@ http {
         client_max_body_size 50M;
 
         location / {
-            proxy_pass http://devplatform-portal:3000;
+            set $upstream_portal "devplatform-portal:3000";
+            proxy_pass http://$upstream_portal;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -301,7 +305,8 @@ http {
         client_max_body_size 256M;
 
         location / {
-            proxy_pass http://devplatform-phpmyadmin:80;
+            set $upstream_pma "devplatform-phpmyadmin:80";
+            proxy_pass http://$upstream_pma;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -315,7 +320,8 @@ http {
         client_max_body_size 50M;
 
         location / {
-            proxy_pass http://devplatform-pgadmin:80;
+            set $upstream_pga "devplatform-pgadmin:80";
+            proxy_pass http://$upstream_pga;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -330,7 +336,8 @@ http {
         client_max_body_size 2048M;
 
         location / {
-            proxy_pass http://devplatform-filebrowser:80;
+            set $upstream_fb "devplatform-filebrowser:80";
+            proxy_pass http://$upstream_fb;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
