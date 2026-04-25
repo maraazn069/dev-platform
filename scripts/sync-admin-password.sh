@@ -64,7 +64,10 @@ else
   # Strategi paling solid: hapus user (kalau ada) lalu add ulang dengan password baru.
   # Ini selalu sukses tanpa tergantung apakah user sudah ada atau belum.
   fb_cli users rm "$ADMIN_USERNAME" >/dev/null 2>&1 || true
-  FB_OUT=$(fb_cli users add "$ADMIN_USERNAME" "$ADMIN_PASSWORD" --perm.admin)
+  # --scope /srv = admin lihat seluruh /opt/devplatform/data (dimount ke /srv di container).
+  # Tanpa ini, admin nge-load halaman kosong "It feels lonely here..." karena scope
+  # default user baru di v2.30.0 = "/users" yg gak ada.
+  FB_OUT=$(fb_cli users add "$ADMIN_USERNAME" "$ADMIN_PASSWORD" --perm.admin --scope /srv)
   FB_RC=$?
 
   docker start devplatform-filebrowser >/dev/null 2>&1 || true

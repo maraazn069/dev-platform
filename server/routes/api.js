@@ -169,8 +169,14 @@ router.delete('/databases/:type/:name', requireAuth, (req, res) => {
 
 router.get('/my/projects', requireAuth, (req, res) => {
   const username = req.session.user.username;
+  const domain = process.env.DOMAIN || 'dev.example.com';
+  const proto = process.env.PROTOCOL || 'http';
+  const projects = projectManager.listProjects(username).map(p => ({
+    ...p,
+    url: `${proto}://${username}.${domain}/?folder=/config/projects/${encodeURIComponent(p.name)}`
+  }));
   res.json({
-    projects: projectManager.listProjects(username),
+    projects,
     trash: projectManager.listTrash(username)
   });
 });

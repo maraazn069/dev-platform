@@ -905,10 +905,23 @@ Web UI untuk admin browse, upload, download, edit, dan hapus file di
   ATAU langsung di https://files.dev.netprem.org
 
 **Login pertama:**
-- Username: `admin`
-- Password: `admin`
-- ⚠️ **WAJIB ganti password** setelah login (klik avatar pojok kanan atas → Settings →
-  Change Password). Kalau lupa diganti, user lain bisa akses semua file workspace!
+- Username & password: sama dengan admin Portal (di `.env` → `ADMIN_USERNAME`/`ADMIN_PASSWORD`).
+  Kalau script install belum sempat bikin, jalanin `sudo bash scripts/sync-admin-password.sh`.
+
+⚠️ **Kalau setelah login halaman kosong "It feels lonely here..."**
+Itu karena scope user admin gak di-set ke `/srv`. Jalanin script di atas (versi terbaru
+sudah otomatis pakai `--scope /srv`), atau manual:
+```bash
+cd ~/dev-platform
+USR=$(sudo grep '^ADMIN_USERNAME=' .env | cut -d= -f2- | tr -d '"')
+FB_VOL=$(sudo docker inspect devplatform-filebrowser --format '{{range .Mounts}}{{if eq .Destination "/database"}}{{.Name}}{{end}}{{end}}')
+sudo docker stop devplatform-filebrowser
+sudo docker run --rm -v "${FB_VOL}":/database --entrypoint /filebrowser \
+  filebrowser/filebrowser:v2.30.0 users update "$USR" --scope /srv \
+  --database /database/filebrowser.db
+sudo docker start devplatform-filebrowser
+```
+Refresh browser → kakak harusnya liat folder semua user (admin, dll).
 
 **Use case:**
 - Restore file user yang ke-delete tidak sengaja (cek folder `.trash/<user>/`)

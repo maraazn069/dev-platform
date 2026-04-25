@@ -22,6 +22,31 @@ function ensureDirs(username) {
   fs.mkdirSync(trashDir(username), { recursive: true });
 }
 
+// Hitung total ukuran folder (bytes) — recursive, tapi cap di N file biar gak hang
+// kalau folder besar (mis. node_modules). Return KB.
+function getDirSizeKb(dir, fileCap = 5000) {
+  let total = 0;
+  let count = 0;
+  const stack = [dir];
+  try {
+    while (stack.length && count < fileCap) {
+      const cur = stack.pop();
+      let entries;
+      try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+      for (const e of entries) {
+        if (count >= fileCap) break;
+        const p = path.join(cur, e.name);
+        if (e.isDirectory()) {
+          stack.push(p);
+        } else if (e.isFile()) {
+          try { total += fs.statSync(p).size; count++; } catch {}
+        }
+      }
+    }
+  } catch {}
+  return Math.round(total / 1024);
+}
+
 function listProjects(username) {
   try {
     ensureDirs(username);
@@ -30,12 +55,16 @@ function listProjects(username) {
       .filter(e => e.isDirectory())
       .map(e => {
         const p = path.join(projectsDir(username), e.name);
-        let mtime = null, size = 0;
+        let mtime = null;
         try {
           const st = fs.statSync(p);
           mtime = st.mtime.toISOString();
         } catch (_) {}
-        return { name: e.name, mtime };
+        return {
+          name: e.name,
+          mtime,
+          sizeKb: getDirSizeKb(p)
+        };
       })
       .sort((a, b) => (b.mtime || '').localeCompare(a.mtime || ''));
   } catch (e) {
@@ -44,6 +73,8 @@ function listProjects(username) {
 }
 
 function listTrash(username) {
+  const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
   try {
     ensureDirs(username);
     return fs.readdirSync(trashDir(username), { withFileTypes: true })
@@ -52,7 +83,13 @@ function listTrash(username) {
         const m = e.name.match(/^(.+)__(\d+)$/);
         const original = m ? m[1] : e.name;
         const ts = m ? parseInt(m[2]) : null;
-        return { trashName: e.name, originalName: original, deletedAt: ts ? new Date(ts).toISOString() : null };
+        const daysLeft = ts ? Math.max(0, Math.ceil((ts + RETENTION_MS - now) / (24 * 60 * 60 * 1000))) : 0;
+        return {
+          trashName: e.name,
+          originalName: original,
+          deletedAt: ts ? new Date(ts).toISOString() : null,
+          daysLeft
+        };
       })
       .sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
   } catch {
