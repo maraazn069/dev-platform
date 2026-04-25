@@ -1,0 +1,13 @@
+{
+  "name": "self-hosted-dev-platform",
+  "version": "1.0.0",
+  "description": "Self-hosted coding platform setup for VPS deployment",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.22.1"
+  }
+}

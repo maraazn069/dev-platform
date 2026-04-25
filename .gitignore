@@ -1,0 +1,22 @@
+# Environment variables (JANGAN pernah di-commit ke GitHub!)
+.env
+
+# Konfigurasi user lokal (berisi password!)
+scripts/users/
+/opt/
+
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
