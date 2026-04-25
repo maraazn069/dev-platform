@@ -309,6 +309,17 @@ otomatis, dan hardening VPS.
 - `CODE_SERVER_MEM=2g`, `CODE_SERVER_CPUS=1.5`, `CODE_SERVER_PIDS=300`
 - `BACKUP_ROOT=/opt/devplatform/backups`
 
+### File Browser (Admin Only)
+- Service `filebrowser` (image `filebrowser/filebrowser:s6`) di docker-compose.yml
+- Mount `/opt/devplatform/data:/srv` → admin bisa akses semua workspace user
+- Volume `filebrowser_db` (config + auth db) + `filebrowser_config`
+- Resource limits: 256M / 0.3 cpu (sangat ringan)
+- Akses via subdomain `files.DOMAIN` (nginx route ditambah di install-vps.sh + setup-https.sh)
+- Tombol launcher di admin.html section "File Browser" (warna hijau, target=_blank)
+- Login pertama default `admin/admin` — image filebrowser/filebrowser:s6 auto-prompt
+  ganti password di first login (built-in behavior)
+- Use case: restore file user dari `.trash/`, upload template, edit config tanpa SSH
+
 ### Migration Notes (Existing VPS)
 Saat user `git pull` di VPS lama, untuk dapat fitur baru:
 1. `cd ~/dev-platform && git pull origin main`

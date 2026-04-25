@@ -162,6 +162,26 @@ http {
 
     server {
         listen 443 ssl;
+        server_name files.__DOMAIN__;
+        client_max_body_size 2048M;
+
+        ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+
+        location / {
+            proxy_pass http://devplatform-filebrowser:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 600s;
+            proxy_send_timeout 600s;
+        }
+    }
+
+    server {
+        listen 443 ssl;
         server_name ~^(?<username>[a-z][a-z0-9]+)\.__DOMAIN__$;
 
         ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
@@ -227,8 +247,9 @@ echo "  ✓ HTTPS berhasil dikonfigurasi!"
 echo "  ================================================"
 echo -e "${NC}"
 echo -e "  Portal    : ${CYAN}https://$DOMAIN${NC}"
-echo -e "  phpMyAdmin: ${CYAN}https://mysql.$DOMAIN${NC}"
-echo -e "  pgAdmin   : ${CYAN}https://pgadmin.$DOMAIN${NC}"
+echo -e "  phpMyAdmin   : ${CYAN}https://mysql.$DOMAIN${NC}"
+echo -e "  pgAdmin      : ${CYAN}https://pgadmin.$DOMAIN${NC}"
+echo -e "  File Browser : ${CYAN}https://files.$DOMAIN${NC}  (login pertama: admin/admin → wajib ganti)"
 echo -e "  User VS Code: ${CYAN}https://USERNAME.$DOMAIN${NC}"
 echo ""
 echo -e "  Semua subdomain user langsung dapat HTTPS (wildcard cert)"

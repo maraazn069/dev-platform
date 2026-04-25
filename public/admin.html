@@ -197,7 +197,7 @@
     </div>
 
     <div class="section-title">Database Server</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:32px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
         <div style="font-weight:600;color:#3fb950;margin-bottom:10px;">🐘 PostgreSQL</div>
         <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
@@ -215,6 +215,28 @@
           Tiap user punya <strong style="color:#f0f6fc;">database sendiri</strong> (USERNAME_default + custom).<br>
           Web UI: <a href="#" id="pmaLink" style="color:#58a6ff;">🚀 Buka phpMyAdmin</a>
         </div>
+      </div>
+    </div>
+
+    <div class="section-title">File Browser (semua workspace user)</div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;margin-bottom:32px;">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="font-size:2.4rem;">📁</div>
+        <div style="flex:1;min-width:240px;">
+          <div style="font-weight:600;color:#f0f6fc;margin-bottom:4px;">File Browser</div>
+          <div style="font-size:0.82rem;color:#8b949e;line-height:1.6;">
+            Browse, upload, download, edit, dan hapus file di
+            <span style="color:#79c0ff;">/opt/devplatform/data/</span> (semua workspace user
+            + folder <code>.trash</code>). Berguna buat troubleshoot, restore file user, atau
+            transfer berkas tanpa SSH.<br>
+            <span style="color:#f7b955;">⚠ Login pertama: <strong>admin / admin</strong> — wajib ganti password di pojok kanan atas filebrowser.</span>
+          </div>
+        </div>
+        <a href="#" id="filebrowserLink" target="_blank"
+           style="background:#238636;color:#fff;padding:10px 18px;border-radius:8px;
+                  text-decoration:none;font-weight:600;white-space:nowrap;">
+          🚀 Buka File Browser
+        </a>
       </div>
     </div>
   </div>
@@ -352,6 +374,8 @@
       document.getElementById('adminName').textContent = data.user.displayName;
       const host = window.location.hostname.replace(/^www\./, '');
       const proto = window.location.protocol;
+      const fbLink = document.getElementById('filebrowserLink');
+      if (fbLink) { fbLink.href = `${proto}//files.${host}`; }
       const pgadminLink = document.getElementById('pgadminLink');
       const pmaLink = document.getElementById('pmaLink');
       if (pgadminLink) { pgadminLink.href = `${proto}//pgadmin.${host}`; pgadminLink.target = '_blank'; }

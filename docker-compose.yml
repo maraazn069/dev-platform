@@ -135,6 +135,38 @@ services:
       timeout: 5s
       retries: 5
 
+  # ---- File Browser (web UI untuk admin browse /opt/devplatform/data) ----
+  # Akses via https://files.DOMAIN, login pertama: admin/admin (wajib ganti).
+  # Mount root /opt/devplatform/data → admin bisa upload/download/edit file
+  # semua user (workspace, project, .trash) lewat browser.
+  filebrowser:
+    image: filebrowser/filebrowser:s6
+    container_name: devplatform-filebrowser
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=${TZ:-Asia/Jakarta}
+    volumes:
+      - /opt/devplatform/data:/srv
+      - filebrowser_db:/database
+      - filebrowser_config:/config
+    networks:
+      - devplatform
+    deploy:
+      resources:
+        limits: { memory: 256M, cpus: '0.3' }
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # ---- phpMyAdmin: Web UI lengkap untuk MySQL (gaya cPanel) ----
   # Akses: https://mysql.dev.domainmu.com
   # AllowArbitraryServer aktif supaya bisa auto-login dari portal dengan kredensial user
@@ -209,6 +241,8 @@ volumes:
   mysql_data:
   portainer_data:
   pgadmin_data:
+  filebrowser_db:
+  filebrowser_config:
 
 networks:
   devplatform:

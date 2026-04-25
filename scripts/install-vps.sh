@@ -310,6 +310,22 @@ http {
     }
 
     server {
+        listen 80;
+        server_name files.__DOMAIN__;
+        client_max_body_size 2048M;
+
+        location / {
+            proxy_pass http://devplatform-filebrowser:80;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 600s;
+            proxy_send_timeout 600s;
+        }
+    }
+
+    server {
         listen 80 default_server;
         server_name _;
         return 301 http://__DOMAIN__$request_uri;
@@ -359,11 +375,13 @@ echo -e "${BOLD}Kredensial Database (simpan baik-baik!):${NC}"
 echo -e "  PostgreSQL password : ${YELLOW}$PG_PASS${NC}"
 echo -e "  MySQL root password : ${YELLOW}$MYSQL_ROOT_PASS${NC}"
 echo ""
-echo -e "${BOLD}Web UI Database:${NC}"
-echo -e "  phpMyAdmin (MySQL)  : ${CYAN}https://mysql.$DOMAIN${NC}  (root / $MYSQL_ROOT_PASS)"
-echo -e "  pgAdmin (PostgreSQL): ${CYAN}https://pgadmin.$DOMAIN${NC}"
-echo -e "    Login email     : ${YELLOW}$PGADMIN_EMAIL${NC}"
-echo -e "    Login password  : ${YELLOW}$PGADMIN_PASSWORD${NC}"
+echo -e "${BOLD}Web UI Database & File:${NC}"
+echo -e "  phpMyAdmin (MySQL)   : ${CYAN}https://mysql.$DOMAIN${NC}  (root / $MYSQL_ROOT_PASS)"
+echo -e "  pgAdmin (PostgreSQL) : ${CYAN}https://pgadmin.$DOMAIN${NC}"
+echo -e "    Login email      : ${YELLOW}$PGADMIN_EMAIL${NC}"
+echo -e "    Login password   : ${YELLOW}$PGADMIN_PASSWORD${NC}"
+echo -e "  File Browser         : ${CYAN}https://files.$DOMAIN${NC}"
+echo -e "    Login pertama    : ${YELLOW}admin / admin${NC}  ${RED}(WAJIB ganti password setelah login!)${NC}"
 echo ""
 echo -e "${YELLOW}Langkah selanjutnya (WAJIB):${NC}"
 echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"

@@ -415,6 +415,7 @@ sudo docker restart nginx-proxy # reload nginx
 | 💻 VS Code User | https://USERNAME.dev.netprem.org |
 | 🐬 phpMyAdmin | https://mysql.dev.netprem.org |
 | 🐘 pgAdmin | https://pgadmin.dev.netprem.org |
+| 📁 File Browser | https://files.dev.netprem.org (admin only) |
 | 🐳 Portainer | http://20.200.209.228:9000 (SSH tunnel only) |
 
 ---
@@ -551,6 +552,56 @@ folder `/opt/devplatform/data/<username>/`). Tidak ada quota enforcement OS-leve
 Cek manual:
 ```bash
 sudo du -sh /opt/devplatform/data/*/
+```
+
+---
+
+## 1️⃣3️⃣B File Browser (Admin Only)
+
+Web UI untuk admin browse, upload, download, edit, dan hapus file di
+`/opt/devplatform/data/` (semua workspace user + folder `.trash`) tanpa SSH.
+
+**Akses:**
+- Lewat Panel Admin → tombol **🚀 Buka File Browser** (section File Browser),
+  ATAU langsung di https://files.dev.netprem.org
+
+**Login pertama:**
+- Username: `admin`
+- Password: `admin`
+- ⚠️ **WAJIB ganti password** setelah login (klik avatar pojok kanan atas → Settings →
+  Change Password). Kalau lupa diganti, user lain bisa akses semua file workspace!
+
+**Use case:**
+- Restore file user yang ke-delete tidak sengaja (cek folder `.trash/<user>/`)
+- Upload starter project / template ke workspace user
+- Download project user untuk audit / backup manual
+- Edit file config user (mis. `.env` di project) tanpa harus exec ke container
+- Cek penggunaan disk per folder
+
+**Reset password admin filebrowser kalau lupa:**
+```bash
+# Akses container
+sudo docker exec -it devplatform-filebrowser sh
+
+# Reset password admin
+filebrowser users update admin --password "PasswordBaruKuat123" \
+  --database /database/filebrowser.db
+exit
+```
+
+**Tambah user kedua di filebrowser** (mis. read-only viewer):
+```bash
+sudo docker exec devplatform-filebrowser \
+  filebrowser users add viewer "PasswordViewer123" \
+  --perm.admin=false --perm.delete=false --perm.modify=false \
+  --database /database/filebrowser.db
+```
+
+**Hapus / disable filebrowser** (kalau tidak mau dipakai):
+```bash
+sudo docker compose stop filebrowser
+sudo docker compose rm -f filebrowser
+# Hapus dari nginx config: hapus block server_name files.DOMAIN; reload nginx
 ```
 
 ---
