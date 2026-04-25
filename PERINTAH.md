@@ -847,6 +847,126 @@ Container code-server bisa pasang extension AI gratis/lebih murah. Cara install 
 
 ---
 
+## 1️⃣1️⃣B Cara Jalanin Project & Lihat Preview (PHP / Node / Python)
+
+User non-tech sering bingung: "PHP saya gimana jalaninnya? Apa otomatis muncul di subdomain?"
+**Jawaban: tidak otomatis — kakak harus klik Run di terminal.** Tapi gampang banget, runtime sudah pre-installed jadi user TIDAK perlu `apt install` apa-apa.
+
+### Apa saja yang sudah pre-installed di setiap container user
+
+| Bahasa / Tool | Versi | Cara cek di terminal |
+|---|---|---|
+| **PHP** + ekstensi (sqlite, mysql, pgsql, mbstring, xml, zip, gd, curl, intl, bcmath) | 8.x | `php -v` |
+| **Composer** (PHP package manager) | latest | `composer --version` |
+| **Node.js** + npm + yarn + pnpm | 20.x | `node -v` |
+| **Python 3** + pip + venv | 3.x | `python -V` |
+| **MySQL client** (`mysql`) | 8.x | `mysql --version` |
+| **PostgreSQL client** (`psql`) | latest | `psql --version` |
+| **SQLite3**, **Git**, **build-essential**, vim, nano, jq, tree | — | — |
+
+> User **tidak perlu** ngetik `sudo apt install php-mysql` lagi — semua sudah ada.
+> Kalau install command muncul di chat AI, ABAIKAN. Itu saran AI yang gak tau image kakak udah pre-baked.
+
+### Cara buka terminal di VS Code (code-server)
+
+1. Buka project user (klik card project di dashboard portal).
+2. Di VS Code yg terbuka, tekan **`` Ctrl+`  ``** (Ctrl + tilde) — atau menu **Terminal → New Terminal**.
+3. Terminal muncul di bawah. Otomatis ada greeting yg nampilkan versi runtime.
+
+### Jalanin project (cara cepat — pakai shortcut `run`)
+
+```bash
+# Di terminal VS Code, masuk ke folder project (kalau belum)
+cd /config/projects/keuangan      # ganti 'keuangan' sesuai nama project
+
+# Auto-detect & jalanin (PHP / Node / Python)
+run
+```
+
+Script `run` otomatis deteksi tipe project:
+- Ada `router.php` / `index.php` → `php -S 0.0.0.0:5000 router.php`
+- Ada `package.json` → `npm run dev` atau `npm start`
+- Ada `manage.py` → Django runserver
+- Ada `app.py` / `main.py` → `python app.py` (auto `pip install -r requirements.txt`)
+- Ada `index.html` → `python -m http.server 5000`
+
+### Jalanin manual (kalau project butuh setup khusus)
+
+```bash
+# PHP — pakai built-in server di port 5000
+cd /config/projects/keuangan
+php -S 0.0.0.0:5000 router.php
+# Atau dengan composer dulu kalau ada composer.json:
+composer install
+php -S 0.0.0.0:5000
+
+# Node.js
+cd /config/projects/web-app
+npm install
+npm run dev
+
+# Python (Flask/FastAPI)
+cd /config/projects/api
+pip install -r requirements.txt
+python app.py
+```
+
+### 🌐 Akses Preview di Browser
+
+**Aturan PENTING:** project HARUS listen di `0.0.0.0` (BUKAN `localhost` atau `127.0.0.1`),
+kalau tidak code-server gak bisa proxy ke luar container.
+
+Setelah `run` jalan, buka URL ini di browser (ganti USERNAME & port):
+```
+https://USERNAME.dev.netprem.org/proxy/5000/
+```
+
+Contoh kalau user-nya `budi` dan project jalan di port 5000:
+```
+https://budi.dev.netprem.org/proxy/5000/
+```
+
+Kalau pakai port lain (mis. Vite di 5173), tinggal ganti angkanya:
+```
+https://budi.dev.netprem.org/proxy/5173/
+```
+
+> Code-server otomatis sediain HTTPS proxy ke port apapun yg listen di container.
+> Trailing slash `/` di akhir URL **wajib** — kalau gak ada, asset (CSS/JS) bisa pecah.
+
+### Konek ke Database dari project user
+
+Database hostname di dalam container code-server:
+- MySQL: `devplatform-mysql` (port 3306)
+- PostgreSQL: `devplatform-postgres` (port 5432)
+
+Username & password DB user bisa dilihat di portal: section **Database** → tombol **🔑 Lihat Credentials**.
+
+Contoh PHP konek MySQL:
+```php
+$pdo = new PDO('mysql:host=devplatform-mysql;dbname=USERNAME_default;charset=utf8mb4',
+               'USERNAME', 'PASSWORD_DARI_PORTAL');
+```
+
+Contoh dari terminal langsung query:
+```bash
+mysql -h devplatform-mysql -u USERNAME -p
+psql -h devplatform-postgres -U USERNAME -d USERNAME_default
+```
+
+### ⚠️ Project tidak otomatis jalan saat user login
+
+Setiap kali code-server container restart (mis. setelah idle timeout / VPS reboot), aplikasi user **mati** dan harus di-`run` ulang dari terminal. Ini normal — code-server itu **editor**, bukan production server.
+
+Kalau mau project user **selalu hidup** sebagai service:
+1. Beli/sewa VPS terpisah & deploy proper (cara production)
+2. ATAU: pakai PM2 di terminal user (`npm i -g pm2 && pm2 start app.js && pm2 save`).
+   ⚠️ PM2 mati waktu container di-restart, jadi gak benar-benar permanent.
+
+Untuk skenario kakak (1-10 user belajar coding), user manual `run` saat butuh testing **adalah behavior yg paling mendekati Replit free tier**.
+
+---
+
 ## 1️⃣2️⃣ Audit Log (Siapa Ngapain Kapan)
 
 Semua aksi penting dicatat ke `server/data/audit.log` (JSONL append-only):

@@ -1,6 +1,8 @@
 FROM lscr.io/linuxserver/code-server:latest
 
 USER root
+
+# Layer 1: tools dasar + Python + Node.js
 RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip zip tar gzip bzip2 xz-utils \
     wget curl jq tree \
@@ -14,4 +16,94 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get install -y nodejs \
   && npm install -g yarn pnpm \
+  && ln -sf /usr/bin/python3 /usr/local/bin/python \
+  && ln -sf /usr/bin/pip3 /usr/local/bin/pip \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Layer 2: PHP + Composer + DB clients
+# php-cli + ekstensi umum (sqlite, mysql, pgsql, mbstring, xml, gd, zip, curl, intl, bcmath)
+# default-mysql-client + postgresql-client supaya user bisa mysql/psql dari terminal.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    php-cli php-sqlite3 php-mysql php-pgsql \
+    php-curl php-mbstring php-xml php-zip php-gd php-bcmath php-intl \
+    default-mysql-client postgresql-client \
+  && curl -fsSL https://getcomposer.org/installer | php -- \
+       --install-dir=/usr/local/bin --filename=composer \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Layer 3: helper scripts (run, install) + greeting
+# Pakai single RUN dengan cat heredoc — kompatibel semua versi Docker (tidak butuh BuildKit 1.4).
+RUN cat > /usr/local/bin/run << 'RUNEOF' && chmod +x /usr/local/bin/run
+#!/usr/bin/env bash
+# Auto-jalankan project di port 5000.
+# Akses preview di: https://<username>.<domain>/proxy/5000/
+set -e
+PORT="${PORT:-5000}"
+cd "${1:-.}"
+
+if [ -f "router.php" ]; then
+  echo "▶ Deteksi: PHP project (router.php) — jalan di port $PORT"
+  exec php -S 0.0.0.0:"$PORT" router.php
+elif [ -f "index.php" ]; then
+  echo "▶ Deteksi: PHP project (index.php) — jalan di port $PORT"
+  exec php -S 0.0.0.0:"$PORT"
+elif [ -f "package.json" ]; then
+  if grep -q '"dev"' package.json; then
+    echo "▶ Deteksi: Node.js — npm run dev (port $PORT kalau dev script support)"
+    [ ! -d node_modules ] && npm install
+    exec npm run dev
+  elif grep -q '"start"' package.json; then
+    echo "▶ Deteksi: Node.js — npm start"
+    [ ! -d node_modules ] && npm install
+    exec npm start
+  else
+    echo "▶ Tidak ada script dev/start. Tambah dulu di package.json."
+    exit 1
+  fi
+elif [ -f "manage.py" ]; then
+  echo "▶ Deteksi: Django — python manage.py runserver"
+  exec python manage.py runserver "0.0.0.0:$PORT"
+elif [ -f "app.py" ] || [ -f "main.py" ]; then
+  FILE="app.py"; [ -f "main.py" ] && FILE="main.py"
+  [ -f "requirements.txt" ] && pip install --quiet -r requirements.txt 2>/dev/null || true
+  echo "▶ Deteksi: Python — python $FILE"
+  exec python "$FILE"
+elif [ -f "index.html" ]; then
+  echo "▶ Deteksi: Static HTML — python http.server di port $PORT"
+  exec python -m http.server "$PORT" --bind 0.0.0.0
+else
+  echo "❌ Tidak bisa deteksi tipe project."
+  echo "Jalanin manual:"
+  echo "  PHP    : php -S 0.0.0.0:5000 [router.php]"
+  echo "  Node   : npm run dev  /  node server.js"
+  echo "  Python : python app.py  /  python -m http.server 5000"
+  exit 1
+fi
+RUNEOF
+
+# Greeting saat buka terminal
+RUN cat > /etc/skel/.bash_aliases << 'BASHRC'
+# Dev Platform — shortcuts
+alias ll='ls -lah'
+alias gs='git status'
+alias gp='git pull'
+
+if [ -t 1 ] && [ -z "$DEV_PLATFORM_GREETED" ]; then
+  export DEV_PLATFORM_GREETED=1
+  echo ""
+  echo "📦 Dev Platform — runtime tersedia:"
+  echo "   PHP $(php -r 'echo PHP_VERSION;' 2>/dev/null)  •  Node $(node -v 2>/dev/null | sed 's/v//')  •  Python $(python -V 2>&1 | awk '{print $2}')"
+  echo "   Composer  •  npm/yarn/pnpm  •  mysql/psql/sqlite3"
+  echo ""
+  echo "💡 Tips:"
+  echo "   • Ketik 'run' untuk auto-jalanin project di port 5000"
+  echo "   • Akses preview di browser: https://USERNAME.DOMAIN/proxy/5000/"
+  echo "   • DB connect dari terminal: mysql -h devplatform-mysql -u USER -p"
+  echo ""
+fi
+BASHRC
+
+# Append loader ke .bashrc default + copy ke /root buat akses awal
+RUN echo '[ -f ~/.bash_aliases ] && . ~/.bash_aliases' >> /etc/skel/.bashrc \
+ && cp /etc/skel/.bash_aliases /root/.bash_aliases \
+ && echo '[ -f ~/.bash_aliases ] && . ~/.bash_aliases' >> /root/.bashrc
