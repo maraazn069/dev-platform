@@ -229,7 +229,7 @@
             <span style="color:#79c0ff;">/opt/devplatform/data/</span> (semua workspace user
             + folder <code>.trash</code>). Berguna buat troubleshoot, restore file user, atau
             transfer berkas tanpa SSH.<br>
-            <span style="color:#f7b955;">⚠ Login pertama: <strong>admin / admin</strong> — wajib ganti password di pojok kanan atas filebrowser.</span>
+            <span style="color:#7ee787;">✓ Login pakai akun admin yang sama (username & password admin portal kakak).</span>
           </div>
         </div>
         <a href="#" id="filebrowserLink" target="_blank"
@@ -475,6 +475,7 @@
           </td>
           <td>${projects || '<span style="color:#6e7681;">–</span>'}</td>
           <td>
+            <button class="action-btn" style="border-color:#3fb950;color:#3fb950;" onclick="openVscode('${u.username}')" title="Buka VS Code user (login pakai password user)">💻 VS Code</button>
             <button class="action-btn" onclick="openAddProject('${u.username}')">+ Project</button>
             <button class="action-btn" onclick="openResetPw('${u.username}')">🔑</button>
             <button class="action-btn" onclick="viewCreds('${u.username}')">🐘 DB</button>
@@ -588,6 +589,16 @@
           <ul style="margin-left:18px;color:#c9d1d9;font-size:.8rem;">${dbs || '<li style="color:#8b949e;">(belum ada)</li>'}</ul>
         </div>
       `;
+    }
+
+    function openVscode(username) {
+      const host = window.location.hostname.replace(/^www\./, '');
+      const proto = window.location.protocol;
+      const url = `${proto}//${username}.${host}`;
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        alert(`Browser memblokir popup. Buka manual:\n${url}\n\nLogin pakai password user "${username}" (bukan password admin).`);
+      }
     }
 
     function openResetPw(username) {

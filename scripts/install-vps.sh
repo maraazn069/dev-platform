@@ -398,6 +398,22 @@ NGINXEOF
 sed -i "s|__DOMAIN__|$DOMAIN|g" nginx/nginx.conf
 echo -e "${GREEN}✓ nginx.conf dibuat untuk domain: $DOMAIN${NC}"
 
+# Pre-flight: pastikan kode versi unified-admin terbaru
+if [ ! -f scripts/sync-admin-password.sh ]; then
+  echo ""
+  echo -e "${RED}❌ ERROR: kode di folder ini terlalu lama${NC}"
+  echo -e "${YELLOW}   File scripts/sync-admin-password.sh tidak ada.${NC}"
+  echo -e "${YELLOW}   Jalankan dulu: ${BOLD}sudo git pull origin main${NC}"
+  echo -e "${YELLOW}   Lalu install ulang.${NC}"
+  exit 1
+fi
+
+# Reset users.json supaya admin baru dari .env diapply (bukan admin lama dari install sebelumnya)
+if [ -f server/data/users.json ]; then
+  echo -e "${YELLOW}→ Hapus users.json lama supaya admin di-create ulang dari .env baru${NC}"
+  rm -f server/data/users.json
+fi
+
 # Build & start semua service
 echo ""
 echo -e "${CYAN}Menjalankan semua service...${NC}"
@@ -419,51 +435,12 @@ docker compose restart nginx
 sleep 3
 
 # === Bootstrap akun unified ke File Browser & pgAdmin ===
+# Pakai scripts/sync-admin-password.sh sebagai single source of truth
 echo ""
-echo -e "${CYAN}Sync akun admin tunggal ke File Browser & pgAdmin...${NC}"
-
-# Deteksi volume File Browser dari container (lebih reliable daripada nebak nama)
-FB_VOLUME=$(docker inspect devplatform-filebrowser --format '{{range .Mounts}}{{if eq .Destination "/database"}}{{.Name}}{{end}}{{end}}' 2>/dev/null)
-
-if [ -z "$FB_VOLUME" ]; then
-  echo -e "${YELLOW}⚠ Container devplatform-filebrowser belum siap, skip sync File Browser${NC}"
-  echo -e "${YELLOW}  Default: admin/admin — kakak bisa ganti manual via UI nanti${NC}"
-else
-  # 1. File Browser: stop, update admin password, start
-  docker stop devplatform-filebrowser >/dev/null 2>&1
-  sleep 2
-  FB_RESULT=$(docker run --rm \
-    -v "${FB_VOLUME}":/database \
-    --entrypoint filebrowser \
-    filebrowser/filebrowser:s6 \
-    users update admin --password "$ADMIN_PASSWORD" \
-    --database /database/filebrowser.db 2>&1)
-  # Selalu start container lagi, bahkan kalau update gagal
-  docker start devplatform-filebrowser >/dev/null 2>&1
-  sleep 3
-  if echo "$FB_RESULT" | grep -qi "error"; then
-    echo -e "${YELLOW}⚠ File Browser sync gagal — login default admin/admin masih aktif${NC}"
-    echo "$FB_RESULT" | tail -3
-  else
-    echo -e "${GREEN}✓ File Browser admin di-sync ke kredensial portal${NC}"
-  fi
-fi
-
-# 2. pgAdmin: tunggu siap, lalu update password (kalau email beda dr default install)
-echo -e "${CYAN}Menunggu pgAdmin siap...${NC}"
-for i in 1 2 3 4 5 6 7 8; do
-  if docker exec devplatform-pgadmin test -f /pgadmin4/setup.py 2>/dev/null; then
-    PG_RESULT=$(docker exec devplatform-pgadmin /venv/bin/python /pgadmin4/setup.py update-password \
-      --user "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>&1)
-    if echo "$PG_RESULT" | grep -qi "error\|fail"; then
-      echo -e "${YELLOW}⚠ pgAdmin sync skipped (akan dipakai dari env saat first-boot)${NC}"
-    else
-      echo -e "${GREEN}✓ pgAdmin admin di-sync${NC}"
-    fi
-    break
-  fi
-  sleep 4
-done
+bash scripts/sync-admin-password.sh || {
+  echo -e "${YELLOW}⚠ Sync admin gagal di tahap install — kakak bisa coba manual nanti:${NC}"
+  echo -e "${YELLOW}  sudo bash scripts/sync-admin-password.sh${NC}"
+}
 
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP-VPS-mu")
 
