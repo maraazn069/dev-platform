@@ -1,0 +1,31 @@
+gamerqu1@Potato:~/dev-platform$ sudo docker logs nginx-proxy 2>&1 | tail -5
+36.83.206.104 - - [25/Apr/2026:08:42:50 +0000] "GET /api/projects/user1 HTTP/1.1" 304 0 "http://dev.netprem.org/dashboard" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+36.83.206.104 - - [25/Apr/2026:08:42:50 +0000] "GET /api/db/info HTTP/1.1" 304 0 "http://dev.netprem.org/dashboard" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+36.83.206.104 - - [25/Apr/2026:08:43:00 +0000] "GET / HTTP/1.1" 301 169 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+36.83.206.104 - - [25/Apr/2026:08:43:04 +0000] "GET / HTTP/1.1" 302 35 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+36.83.206.104 - - [25/Apr/2026:08:43:04 +0000] "GET /login HTTP/1.1" 200 10139 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+gamerqu1@Potato:~/dev-platform$ sudo mkdir -p /opt/devplatform/data/user1/projects/default
+sudo mkdir -p /opt/devplatform/data/user1/config
+
+sudo docker run -d \
+  --name "codeserver-user1" \
+  --restart unless-stopped \
+  --network dev-platform_devplatform \
+  -e PUID=1000 -e PGID=1000 \
+  -e TZ=Asia/Jakarta \
+  -e PASSWORD=user1234 \
+  -e SUDO_PASSWORD=user1234 \
+  -e DEFAULT_WORKSPACE="/config/projects/default" \
+  -v /opt/devplatform/data/user1/projects:/config/projects \
+  -v /opt/devplatform/data/user1/config:/config \
+  --label "devplatform.user=user1" \
+  lscr.io/linuxserver/code-server:latest
+docker: Error response from daemon: Conflict. The container name "/codeserver-user1" is already in use by container "5c5f683c80f47b1d1aff7dcd3300733fa6220dfbd2734695d4c2c72b4fc6b910". You have to remove (or rename) that container to be able to reuse that name.
+
+Run 'docker run --help' for more information
+gamerqu1@Potato:~/dev-platform$ cd ~/dev-platform
+
+# Cek isi nginx.conf sekarang
+grep -n "proxy_pass" nginx/nginx.conf
+15:            proxy_pass http://devplatform-portal:5000;
+gamerqu1@Potato:~/dev-platform$
