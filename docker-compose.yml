@@ -42,8 +42,14 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}
+      - VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-}
+      - PGADMIN_SYNC=${PGADMIN_SYNC:-true}
     volumes:
       - ./server/data:/app/server/data
+      # Cloudflare API token (read-only) untuk auto-DNS subdomain per user.
+      # File ini di-create oleh setup-https.sh. Mount as :ro biar gak bisa di-modif.
+      - /etc/cloudflare:/etc/cloudflare:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/devplatform/data:/opt/devplatform/data
       - /opt/devplatform/backups:/opt/devplatform/backups

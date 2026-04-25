@@ -248,6 +248,17 @@ function provisionUser({ username, password, displayName, email }) {
     .then(r => { if (!r.ok && !r.skipped) console.warn(`[provisionUser] pgAdmin create failed for ${username}: ${r.stderr}`); })
     .catch(e => console.warn(`[provisionUser] pgAdmin error for ${username}: ${e.message}`));
 
+  // 4c) Auto-create Cloudflare DNS record *.<username>.<DOMAIN> → VPS_IP
+  // Tanpa ini, project preview <project>.<user>.<domain> gak resolve.
+  // Fire-and-forget; gagal di-log tapi tidak block provision.
+  const cloudflareDns = require('./cloudflareDns');
+  cloudflareDns.ensureUserSubdomainDns(username)
+    .then(r => {
+      if (r.ok && r.action) console.log(`[provisionUser] CF DNS ${r.action}: ${r.name} → ${r.ip}`);
+      else if (!r.ok) console.warn(`[provisionUser] CF DNS gagal untuk ${username}: ${r.error}`);
+    })
+    .catch(e => console.warn(`[provisionUser] CF DNS error untuk ${username}: ${e.message}`));
+
   // 5) Save to users.json
   // mustChangePassword=true → user dipaksa ganti password admin-set saat login pertama
   const newUser = {
@@ -344,6 +355,19 @@ function removeUser(username) {
   } catch (e) {
     // Non-fatal: file mungkin gak ada (user lama belum kepakai Opsi C).
     console.log(`[removeUser] nginx user-conf cleanup skip: ${e.message}`);
+  }
+
+  // 5b) Cleanup Cloudflare DNS record *.<username>.<DOMAIN> (fire-and-forget).
+  try {
+    const cloudflareDns = require('./cloudflareDns');
+    cloudflareDns.removeUserSubdomainDns(username)
+      .then(r => {
+        if (r.ok && r.action === 'deleted') console.log(`[removeUser] CF DNS deleted: ${r.name}`);
+        else if (!r.ok) console.warn(`[removeUser] CF DNS gagal: ${r.error}`);
+      })
+      .catch(e => console.warn(`[removeUser] CF DNS error: ${e.message}`));
+  } catch (e) {
+    console.log(`[removeUser] CF DNS cleanup skip: ${e.message}`);
   }
 
   // 6) Only remove from users.json if all destructive steps succeeded.
