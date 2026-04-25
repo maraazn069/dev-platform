@@ -49,32 +49,36 @@ else
   docker stop devplatform-filebrowser >/dev/null 2>&1 || true
   sleep 2
 
-  # Coba update dulu — kalau user 'admin' belum ada (DB kosong), buat baru
-  FB_OUT=$(docker run --rm \
-    -v "${FB_VOLUME}":/database \
-    --entrypoint filebrowser \
-    filebrowser/filebrowser:s6 \
-    users update "$ADMIN_USERNAME" --password "$ADMIN_PASSWORD" \
-    --database /database/filebrowser.db 2>&1 || true)
-
-  if echo "$FB_OUT" | grep -qi "the resource does not exist"; then
-    echo "  User belum ada, buat baru..."
-    FB_OUT=$(docker run --rm \
+  # Helper: jalankan FB CLI di transient container.
+  # Pakai path absolut /filebrowser (binary di image :s6 ada di root, bukan di PATH).
+  fb_cli() {
+    docker run --rm \
       -v "${FB_VOLUME}":/database \
-      --entrypoint filebrowser \
+      --entrypoint /filebrowser \
       filebrowser/filebrowser:s6 \
-      users add "$ADMIN_USERNAME" "$ADMIN_PASSWORD" --perm.admin \
-      --database /database/filebrowser.db 2>&1 || true)
-  fi
+      "$@" --database /database/filebrowser.db 2>&1
+  }
+
+  # Strategi paling solid: hapus user (kalau ada) lalu add ulang dengan password baru.
+  # Ini selalu sukses tanpa tergantung apakah user sudah ada atau belum.
+  fb_cli users rm "$ADMIN_USERNAME" >/dev/null 2>&1 || true
+  FB_OUT=$(fb_cli users add "$ADMIN_USERNAME" "$ADMIN_PASSWORD" --perm.admin)
+  FB_RC=$?
 
   docker start devplatform-filebrowser >/dev/null 2>&1 || true
   sleep 3
 
-  if echo "$FB_OUT" | grep -qiE "error|fatal" && ! echo "$FB_OUT" | grep -qi "successfully"; then
-    echo "  ⚠ File Browser sync mungkin gagal:"
-    echo "$FB_OUT" | tail -3 | sed 's/^/    /'
+  if [ $FB_RC -ne 0 ] || echo "$FB_OUT" | grep -qiE "error|fatal|failed"; then
+    echo "  ⚠ File Browser sync gagal:"
+    echo "$FB_OUT" | tail -5 | sed 's/^/    /'
+    echo "  Coba manual:"
+    echo "    sudo docker stop devplatform-filebrowser"
+    echo "    sudo docker run --rm -v ${FB_VOLUME}:/database --entrypoint /filebrowser \\"
+    echo "      filebrowser/filebrowser:s6 users add $ADMIN_USERNAME 'PASSWORD_BARU' \\"
+    echo "      --perm.admin --database /database/filebrowser.db"
+    echo "    sudo docker start devplatform-filebrowser"
   else
-    echo "  ✓ File Browser admin: $ADMIN_USERNAME (password baru aktif)"
+    echo "  ✓ File Browser admin: $ADMIN_USERNAME (password baru aktif, login dgn user '$ADMIN_USERNAME')"
   fi
 fi
 
