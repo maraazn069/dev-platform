@@ -179,20 +179,20 @@
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
         <div style="font-weight:600;color:#3fb950;margin-bottom:10px;">🐘 PostgreSQL</div>
         <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
-          Host: <span style="color:#79c0ff;">localhost:5432</span><br>
+          Host: <span style="color:#79c0ff;">devplatform-postgres:5432</span><br>
           Database: <span style="color:#79c0ff;">devplatform</span><br>
           Admin: <span style="color:#79c0ff;">postgres</span><br>
           Tiap user punya <strong style="color:#f0f6fc;">schema</strong> sendiri.<br>
-          Akses eksternal via <strong style="color:#f0f6fc;">Cloudflare Tunnel</strong>.
+          Web admin: <a href="#" id="adminerLink1" style="color:#58a6ff;">Adminer</a>
         </div>
       </div>
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
         <div style="font-weight:600;color:#f0883e;margin-bottom:10px;">🐬 MySQL</div>
         <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
-          Host: <span style="color:#79c0ff;">localhost:3306</span><br>
+          Host: <span style="color:#79c0ff;">devplatform-mysql:3306</span><br>
           Admin: <span style="color:#79c0ff;">root</span><br>
           Tiap user punya <strong style="color:#f0f6fc;">database</strong> sendiri (db_namauser).<br>
-          Akses eksternal via <strong style="color:#f0f6fc;">Cloudflare Tunnel</strong>.
+          Web admin: <a href="#" id="adminerLink2" style="color:#58a6ff;">Adminer</a>
         </div>
       </div>
     </div>
@@ -266,6 +266,11 @@
       if (!res.ok) return window.location.href = '/login';
       const data = await res.json();
       document.getElementById('adminName').textContent = data.user.displayName;
+      const adminerUrl = window.location.protocol + '//db-admin.' + window.location.hostname.replace(/^www\./, '');
+      const l1 = document.getElementById('adminerLink1');
+      const l2 = document.getElementById('adminerLink2');
+      if (l1) { l1.href = adminerUrl; l1.target = '_blank'; }
+      if (l2) { l2.href = adminerUrl; l2.target = '_blank'; }
       loadUsers();
       setInterval(loadUsers, 15000);
     }

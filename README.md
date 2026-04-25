@@ -150,10 +150,17 @@ psql -h devplatform-postgres -U namauser -d devplatform
 mysql -h devplatform-mysql -u namauser -p db_namauser
 ```
 
-### Dari laptop (via Cloudflare Tunnel)
-- Isi `CLOUDFLARE_TUNNEL_TOKEN` di `.env`
-- Buat tunnel di [dash.cloudflare.com/zero-trust](https://one.dash.cloudflare.com)
-- Gunakan host `db.dev.domainmu.com` di DBeaver/TablePlus/MySQL Workbench
+### Dari laptop (via SSH tunnel)
+```bash
+# PostgreSQL — buka di laptop, lalu connect ke localhost:5432
+ssh -L 5432:localhost:5432 user@vps-ip
+
+# MySQL — buka di laptop, lalu connect ke localhost:3306
+ssh -L 3306:localhost:3306 user@vps-ip
+```
+Setelah tunnel jalan, pakai DBeaver/TablePlus/MySQL Workbench dengan host `localhost`.
+
+Atau buka **Adminer** di browser: `https://db-admin.DOMAIN`
 
 ---
 

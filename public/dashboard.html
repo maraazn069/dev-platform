@@ -151,8 +151,21 @@
     </div>
 
     <div class="section-title">Pengaturan Akun</div>
-    <div style="display:flex; gap:12px; flex-wrap:wrap;">
-      <button class="btn-outline" onclick="openChangePassword()">🔑 Ganti Password</button>
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div style="font-size:0.78rem;color:#8b949e;margin-bottom:4px;">Username</div>
+          <div style="color:#f0f6fc;font-weight:500;" id="acctUsername">—</div>
+        </div>
+        <div>
+          <div style="font-size:0.78rem;color:#8b949e;margin-bottom:4px;">Email</div>
+          <div style="color:#f0f6fc;font-weight:500;" id="acctEmail">—</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn-outline" onclick="openModal('changeEmailModal')">✉️ Ubah Email</button>
+        <button class="btn-outline" onclick="openModal('changePasswordModal')">🔑 Ganti Password</button>
+      </div>
     </div>
   </div>
 
@@ -175,12 +188,31 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="changeEmailModal">
+    <div class="modal">
+      <h3>✉️ Ubah Email</h3>
+      <div class="form-group">
+        <label>Email Baru</label>
+        <input type="email" id="newEmail" placeholder="email@contoh.com">
+      </div>
+      <div class="form-group">
+        <label>Password (untuk verifikasi)</label>
+        <input type="password" id="emailPassword" placeholder="Password kamu">
+      </div>
+      <div class="alert" id="emailAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('changeEmailModal')">Batal</button>
+        <button class="btn-primary" onclick="changeEmail()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentUser = null;
     let domain = window.location.hostname;
 
     async function init() {
-      const res = await fetch('/dashboard/me');
+      const res = await fetch('/auth/me');
       if (!res.ok) return window.location.href = '/login';
       const data = await res.json();
       currentUser = data.user;
@@ -189,6 +221,15 @@
       document.getElementById('displayName').textContent = currentUser.displayName;
       document.getElementById('navUsername').textContent = currentUser.username;
       document.getElementById('avatarInitial').textContent = currentUser.displayName[0].toUpperCase();
+      document.getElementById('acctUsername').textContent = currentUser.username;
+      document.getElementById('acctEmail').textContent = currentUser.email || '(belum diisi)';
+
+      const meRes = await fetch('/dashboard/me');
+      if (meRes.ok) {
+        const me = await meRes.json();
+        currentUser.projects = me.user.projects;
+        currentUser.port = me.user.port;
+      }
 
       loadProjects();
       loadDbInfo();
@@ -230,9 +271,11 @@
             <div class="db-row"><span class="db-key">Host</span><span class="db-val">${db.postgresql.host}</span></div>
             <div class="db-row"><span class="db-key">Port</span><span class="db-val">${db.postgresql.port}</span></div>
             <div class="db-row"><span class="db-key">Database</span><span class="db-val">${db.postgresql.database}</span></div>
+            <div class="db-row"><span class="db-key">Schema</span><span class="db-val">${db.postgresql.schema}</span></div>
             <div class="db-row"><span class="db-key">User</span><span class="db-val">${db.postgresql.user}</span></div>
           </div>
           <p style="margin-top:10px;">${db.postgresql.note}</p>
+          <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;margin-top:8px;font-family:monospace;font-size:0.75rem;color:#7ee787;overflow-x:auto;">${db.postgresql.example}</div>
         </div>
         <div class="card">
           <h4><span class="tag tag-mysql">MySQL</span></h4>
@@ -243,17 +286,13 @@
             <div class="db-row"><span class="db-key">User</span><span class="db-val">${db.mysql.user}</span></div>
           </div>
           <p style="margin-top:10px;">${db.mysql.note}</p>
+          <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:8px 10px;margin-top:8px;font-family:monospace;font-size:0.75rem;color:#7ee787;overflow-x:auto;">${db.mysql.example}</div>
         </div>
       `;
     }
 
-    function openChangePassword() {
-      document.getElementById('changePasswordModal').classList.add('open');
-    }
-
-    function closeModal(id) {
-      document.getElementById(id).classList.remove('open');
-    }
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
     async function changePassword() {
       const alert = document.getElementById('pwAlert');
@@ -269,6 +308,31 @@
       alert.className = 'alert ' + (data.success ? 'success' : 'error');
       alert.textContent = data.message;
       alert.style.display = 'block';
+      if (data.success) {
+        document.getElementById('oldPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        setTimeout(() => closeModal('changePasswordModal'), 1500);
+      }
+    }
+
+    async function changeEmail() {
+      const alert = document.getElementById('emailAlert');
+      const newEmail = document.getElementById('newEmail').value.trim();
+      const password = document.getElementById('emailPassword').value;
+      const res = await fetch('/auth/change-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newEmail, password })
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) {
+        document.getElementById('acctEmail').textContent = newEmail || '(belum diisi)';
+        document.getElementById('emailPassword').value = '';
+        setTimeout(() => closeModal('changeEmailModal'), 1500);
+      }
     }
 
     async function logout() {

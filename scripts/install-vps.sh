@@ -155,9 +155,6 @@ POSTGRES_PASSWORD=$PG_PASS
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASS
 MYSQL_PASSWORD=$MYSQL_PASS
 
-# Cloudflare Tunnel (isi setelah setup tunnel)
-CLOUDFLARE_TUNNEL_TOKEN=
-
 # Direktori data
 DATA_DIR=/opt/devplatform/data
 EOF

@@ -95,3 +95,26 @@ sudo bash scripts/add-user.sh namauser password123
 - Nginx tunggu portal healthy sebelum start (`depends_on: service_healthy`)
 - Wildcard SSL cert cover semua subdomain `*.DOMAIN` sekaligus
 - Setelah HTTPS aktif, portal rebuild otomatis dengan `PROTOCOL=https`
+
+## Update Sesi (Apr 25, 2026)
+### Keamanan Diperkuat
+- **Helmet**: security headers (X-Frame-Options, HSTS, X-Content-Type-Options, dll)
+- **Rate limit login**: 10 percobaan / 15 menit per IP
+- **Session secure**: cookie HttpOnly + SameSite=Lax + Secure (saat HTTPS), regenerate session ID setelah login
+- **SESSION_SECRET**: dari env var, di-generate otomatis saat install (`openssl rand -base64 32`)
+- **Body size limit**: 1mb
+
+### Fitur Akun User
+- Endpoint baru: `/auth/me`, `/auth/change-email`
+- Dashboard tampilkan username + email + tombol ubah email/password
+- Modal "Ubah Email" minta password verifikasi
+- Modal "Ganti Password" auto-clear field setelah sukses
+
+### Database Info Diperbaiki
+- Hostname pakai container name: `devplatform-postgres`, `devplatform-mysql` (akses dari code-server)
+- Tampilkan contoh perintah `psql`/`mysql` siap copy
+- Link Adminer (db-admin.DOMAIN) dari admin panel
+- Hapus semua mention "Cloudflare Tunnel" dari UI/script
+
+### Field User Baru
+- `email` ditambah ke users.json schema (default kosong, opsional)

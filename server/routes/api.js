@@ -90,25 +90,29 @@ router.get('/users/status', requireAdmin, (req, res) => {
 });
 
 router.get('/db/info', requireAuth, (req, res) => {
-  const domain = process.env.DOMAIN || 'dev.domainmu.com';
+  const username = req.session.user.username;
   res.json({
     postgresql: {
-      host: `db.${domain}`,
+      host: 'devplatform-postgres',
       port: 5432,
       database: 'devplatform',
-      user: req.session.user.username,
-      note: 'Minta password ke admin. Setiap user punya schema sendiri.'
+      schema: username,
+      user: username,
+      note: 'Akses langsung dari terminal VS Code-mu. Password dikasih admin.',
+      example: `psql -h devplatform-postgres -U ${username} -d devplatform`
     },
     mysql: {
-      host: `db.${domain}`,
+      host: 'devplatform-mysql',
       port: 3306,
-      database: `db_${req.session.user.username}`,
-      user: req.session.user.username,
-      note: 'Minta password ke admin. Setiap user punya database sendiri.'
+      database: `db_${username}`,
+      user: username,
+      note: 'Akses langsung dari terminal VS Code-mu. Password dikasih admin.',
+      example: `mysql -h devplatform-mysql -u ${username} -p db_${username}`
     },
-    external: {
-      cloudflare_tunnel: `Akses dari luar via Cloudflare Tunnel ke db.${domain}`,
-      tools: ['DBeaver', 'TablePlus', 'pgAdmin', 'MySQL Workbench', 'HeidiSQL']
+    access: {
+      from_codeserver: 'Langsung connect pakai hostname container di atas',
+      from_browser: 'Buka Adminer di db-admin.' + (process.env.DOMAIN || 'domain-kamu'),
+      from_laptop: 'SSH tunnel: ssh -L 5432:localhost:5432 user@vps-ip'
     }
   });
 });
