@@ -22,13 +22,15 @@ services:
     expose:
       - "3000"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET wajib diset di .env (jalankan: openssl rand -hex 32)}
-      - DOMAIN=${DOMAIN:?DOMAIN wajib diset di .env (contoh: netprem.org)}
-      - PROTOCOL=${PROTOCOL:-http}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diset di .env}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diset di .env}
+      # NOTE: gunakan quote string-form untuk semua var dengan ${VAR:?msg} default —
+      # tanpa quote, YAML parser bingung dengan tanda ":" dalam pesan error.
+      - "NODE_ENV=production"
+      - "PORT=3000"
+      - "SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET wajib diset di .env}"
+      - "DOMAIN=${DOMAIN:?DOMAIN wajib diset di .env contoh netprem.org}"
+      - "PROTOCOL=${PROTOCOL:-http}"
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diset di .env}"
+      - "POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diset di .env}"
       - PGADMIN_EMAIL=${PGADMIN_EMAIL:-admin@local.dev}
       - PGADMIN_PASSWORD=${PGADMIN_PASSWORD:-admin123}
       - TZ=${TZ:-Asia/Jakarta}
