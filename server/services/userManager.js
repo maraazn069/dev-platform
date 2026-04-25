@@ -514,12 +514,34 @@ function recreateContainer(username) {
     return { success: false, message: 'Container masih ada setelah rm — recreate gagal.' };
   }
 
+  // OPSI C: pastikan nginx/users/<user>.conf ada (idempotent)
+  let nginxConfMsg = '';
+  try {
+    const r2 = nginxManager.ensureUserConfig(username);
+    if (!r2.success) nginxConfMsg = ` (nginx conf: ${r2.message})`;
+  } catch (e) {
+    nginxConfMsg = ` (nginx conf error: ${e.message})`;
+  }
+
+  // OPSI C: append ke cert-queue.txt biar cron worker request cert *.<user>.DOMAIN
+  let certQueueMsg = '';
+  try {
+    const certPath = `/etc/letsencrypt/live/${username}.${process.env.DOMAIN || 'netprem.org'}/fullchain.pem`;
+    if (!fs.existsSync(certPath)) {
+      const queueFile = path.join(__dirname, '../data/cert-queue.txt');
+      fs.appendFileSync(queueFile, username + '\n');
+      certQueueMsg = ' (cert queued)';
+    }
+  } catch (e) {
+    certQueueMsg = ` (cert queue error: ${e.message})`;
+  }
+
   // Refresh nginx (in case wildcard cert needed reloading)
   try { reloadNginx(); } catch (_) {}
 
   return {
     success: true,
-    message: `Container '${container}' di-recreate (password ${passwordSource}).`,
+    message: `Container '${container}' di-recreate (password ${passwordSource})${nginxConfMsg}${certQueueMsg}.`,
     newPassword: newPasswordGenerated ? password : null
   };
 }
