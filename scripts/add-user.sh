@@ -3,8 +3,6 @@
 # add-user.sh — Tambah user baru ke platform
 # Penggunaan: sudo bash scripts/add-user.sh USERNAME PASSWORD PORT
 # Contoh:    sudo bash scripts/add-user.sh budi password123 8081
-#
-# Catatan: Username, password, dan port didapat dari portal admin
 # ============================================================
 
 set -e
@@ -30,34 +28,47 @@ if ! [[ "$USERNAME" =~ ^[a-z][a-z0-9]{1,15}$ ]]; then
   exit 1
 fi
 
-if [ -f ".env" ]; then
-  export $(grep -v '^#' .env | xargs)
+# Cari file .env (bisa dari direktori sekarang atau direktori script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+if [ -f "$PROJECT_DIR/.env" ]; then
+  set -a; source "$PROJECT_DIR/.env"; set +a
+elif [ -f ".env" ]; then
+  set -a; source ".env"; set +a
 else
-  echo -e "${RED}File .env tidak ditemukan. Jalankan setup.sh terlebih dahulu.${NC}"
+  echo -e "${RED}File .env tidak ditemukan.${NC}"
+  exit 1
+fi
+
+# Deteksi nama network Docker secara otomatis
+DOCKER_NETWORK=$(docker network ls --format "{{.Name}}" | grep devplatform | head -1)
+if [ -z "$DOCKER_NETWORK" ]; then
+  echo -e "${RED}Network Docker devplatform tidak ditemukan. Pastikan docker compose up sudah jalan.${NC}"
   exit 1
 fi
 
 echo -e "${BLUE}Menambah user: ${YELLOW}$USERNAME${BLUE} di port ${YELLOW}$PORT${NC}"
+echo -e "${BLUE}Menggunakan network: ${YELLOW}$DOCKER_NETWORK${NC}"
 
 USER_DIR="/opt/devplatform/data/$USERNAME"
 mkdir -p "$USER_DIR/projects/default"
 mkdir -p "$USER_DIR/config"
 
 # Buat container code-server untuk user ini
-if docker ps -a --format '{{.Names}}' | grep -q "codeserver-$USERNAME"; then
+if docker ps -a --format '{{.Names}}' | grep -q "^codeserver-$USERNAME$"; then
   echo -e "${YELLOW}Container codeserver-$USERNAME sudah ada.${NC}"
 else
   docker run -d \
     --name "codeserver-$USERNAME" \
     --restart unless-stopped \
-    --network devplatform_devplatform \
+    --network "$DOCKER_NETWORK" \
     -e PUID=1000 \
     -e PGID=1000 \
     -e TZ="${TZ:-Asia/Jakarta}" \
     -e PASSWORD="$PASSWORD" \
     -e SUDO_PASSWORD="$PASSWORD" \
     -e DEFAULT_WORKSPACE="/config/projects/default" \
-    -p "$PORT:8443" \
     -v "$USER_DIR/projects:/config/projects" \
     -v "$USER_DIR/config:/config" \
     --label "devplatform.user=$USERNAME" \
@@ -94,8 +105,40 @@ docker exec devplatform-mysql mysql -u root -p"${MYSQL_ROOT_PASSWORD}" -e "
   FLUSH PRIVILEGES;
 " 2>/dev/null || echo -e "${YELLOW}MySQL belum siap, setup manual nanti.${NC}"
 
+# Tambahkan server block nginx untuk subdomain user
+NGINX_CONF="$PROJECT_DIR/nginx/nginx.conf"
+if ! grep -q "codeserver-$USERNAME" "$NGINX_CONF" 2>/dev/null; then
+  echo -e "${YELLOW}Menambah konfigurasi nginx untuk $USERNAME.$DOMAIN...${NC}"
+
+  # Sisipkan server block baru sebelum baris penutup terakhir "}"
+  NEW_BLOCK="
+    server {
+        listen 80;
+        server_name $USERNAME.$DOMAIN;
+
+        location / {
+            proxy_pass http://codeserver-$USERNAME:8443;
+            proxy_set_header Host \$host;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection upgrade;
+            proxy_set_header Accept-Encoding gzip;
+            proxy_read_timeout 86400s;
+        }
+    }"
+
+  # Tambahkan sebelum baris "}" terakhir di file
+  sed -i "$ s/^}/    $NEW_BLOCK\n}/" "$NGINX_CONF" 2>/dev/null || \
+  echo "$NEW_BLOCK" >> "$NGINX_CONF"
+
+  # Reload nginx
+  docker compose -f "$PROJECT_DIR/docker-compose.yml" restart nginx 2>/dev/null || \
+  docker restart nginx-proxy 2>/dev/null || true
+  echo -e "${GREEN}✓ Nginx dikonfigurasi untuk $USERNAME.$DOMAIN${NC}"
+fi
+
 # Simpan info user
-cat > "/opt/devplatform/configs/$USERNAME.conf" <<EOF
+mkdir -p /opt/devplatform/configs
+cat > "/opt/devplatform/configs/$USERNAME.conf" << EOF
 USERNAME=$USERNAME
 PORT=$PORT
 USER_DIR=$USER_DIR
@@ -110,23 +153,22 @@ echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}  User '$USERNAME' berhasil ditambah!      ${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
-echo -e "VS Code   : ${YELLOW}https://$USERNAME.$DOMAIN${NC}"
+echo -e "VS Code   : ${YELLOW}http://$USERNAME.$DOMAIN${NC}"
 echo -e "Password  : ${YELLOW}$PASSWORD${NC}"
 echo ""
 echo -e "PostgreSQL:"
-echo -e "  Host    : localhost:5432 (atau db.$DOMAIN dari luar)"
-echo -e "  DB      : devplatform"
-echo -e "  Schema  : $USERNAME"
+echo -e "  Host    : devplatform-postgres (dari container lain)"
+echo -e "  DB      : devplatform  |  Schema: $USERNAME"
 echo -e "  User    : $USERNAME"
 echo -e "  Password: ${YELLOW}$PG_USER_PASSWORD${NC}"
 echo ""
 echo -e "MySQL:"
-echo -e "  Host    : localhost:3306 (atau db.$DOMAIN dari luar)"
+echo -e "  Host    : devplatform-mysql (dari container lain)"
 echo -e "  DB      : db_$USERNAME"
 echo -e "  User    : $USERNAME"
 echo -e "  Password: ${YELLOW}$MYSQL_USER_PASSWORD${NC}"
 echo ""
 echo -e "${YELLOW}Langkah selanjutnya:${NC}"
-echo -e "  1. Arahkan DNS ${YELLOW}$USERNAME.$DOMAIN${NC} → IP VPS"
-echo -e "  2. sudo certbot --nginx -d $USERNAME.$DOMAIN"
+echo -e "  1. Pastikan DNS ${YELLOW}$USERNAME.$DOMAIN${NC} → IP VPS sudah aktif"
+echo -e "  2. Setelah portal aktif, user bisa login di: http://$DOMAIN"
 echo ""
