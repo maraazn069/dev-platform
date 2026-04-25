@@ -44,6 +44,7 @@ services:
       - ./server/data:/app/server/data
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/devplatform/data:/opt/devplatform/data
+      - /opt/devplatform/backups:/opt/devplatform/backups
       - ./nginx/nginx.conf:/app/nginx/nginx.conf
       - ./.env:/app/.env
       - ./docker-compose.yml:/app/docker-compose.yml:ro
@@ -146,7 +147,9 @@ services:
   # Mount root /opt/devplatform/data → admin bisa upload/download/edit file
   # semua user (workspace, project, .trash) lewat browser.
   filebrowser:
-    image: filebrowser/filebrowser:s6
+    # Catatan: pakai versi non-s6 (binary di /filebrowser, bukan di subfolder s6).
+    # Versi s6 banyak issue: https://github.com/filebrowser/filebrowser/issues/5167
+    image: filebrowser/filebrowser:v2.30.0
     container_name: devplatform-filebrowser
     restart: unless-stopped
     expose:

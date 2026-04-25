@@ -6,6 +6,9 @@ const router = express.Router();
 const userManager = require('../services/userManager');
 const { validateStrong } = require('../services/passwordPolicy');
 const audit = require('../services/auditLog');
+const settingsManager = require('../services/settingsManager');
+const backupManager = require('../services/backupManager');
+const servicesManager = require('../services/servicesManager');
 
 const USERS_FILE = path.join(__dirname, '../data/users.json');
 
@@ -120,6 +123,69 @@ router.get('/pgadmin-credentials', requireAdminApi, (req, res) => {
 router.get('/audit', requireAdminApi, (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 200, 1000);
   res.json({ entries: audit.tail(limit) });
+});
+
+// ===== Settings (edit .env yang aman dari web) =====
+router.get('/settings', requireAdminApi, (req, res) => {
+  res.json({
+    success: true,
+    editable: settingsManager.getEditableSettings(),
+    readOnly: settingsManager.getReadOnlySettings(),
+  });
+});
+
+router.post('/settings', requireAdminApi, (req, res) => {
+  const updates = req.body || {};
+  const result = settingsManager.updateSettings(updates);
+  audit.log('settings.update', { keys: Object.keys(updates), success: result.success }, req);
+  res.json(result);
+});
+
+// ===== Services (status + restart container) =====
+router.get('/services', requireAdminApi, (req, res) => {
+  res.json(servicesManager.listServices());
+});
+
+router.get('/services/stats', requireAdminApi, (req, res) => {
+  res.json({ stats: servicesManager.getDockerStats() });
+});
+
+router.post('/services/restart', requireAdminApi, (req, res) => {
+  const { name } = req.body;
+  const result = servicesManager.restartService(name);
+  audit.log('services.restart', { target: name, success: result.success }, req);
+  res.json(result);
+});
+
+// ===== Backup (list, create, download, delete) =====
+router.get('/backups', requireAdminApi, (req, res) => {
+  res.json({ backups: backupManager.listBackups(), root: backupManager.BACKUP_ROOT });
+});
+
+router.get('/backups/status', requireAdminApi, (req, res) => {
+  res.json(backupManager.getRunningStatus());
+});
+
+router.post('/backups/create', requireAdminApi, async (req, res) => {
+  audit.log('backup.create_start', {}, req);
+  const result = await backupManager.createBackup();
+  audit.log('backup.create_done', { success: result.success, errors: result.errors }, req);
+  res.json(result);
+});
+
+router.get('/backups/download/:category/:timestamp', requireAdmin, (req, res) => {
+  audit.log('backup.download', { id: `${req.params.category}/${req.params.timestamp}` }, req);
+  backupManager.streamBackup(req.params.category, req.params.timestamp, res);
+});
+
+router.post('/backups/delete', requireAdminApi, (req, res) => {
+  const { category, timestamp, confirm } = req.body;
+  if (confirm !== `${category}/${timestamp}`) {
+    return res.json({ success: false, message: 'Konfirmasi tidak cocok.' });
+  }
+  const result = backupManager.deleteBackup(category, timestamp);
+  audit.log('backup.delete', { id: `${category}/${timestamp}`, success: result.success }, req);
+  res.json(result);
 });
 
 module.exports = router;

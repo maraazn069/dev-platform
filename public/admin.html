@@ -239,6 +239,121 @@
         </a>
       </div>
     </div>
+
+    <!-- ===== Pengaturan Platform ===== -->
+    <div class="section-title">
+      ⚙️ Pengaturan Platform
+      <button class="refresh-btn" onclick="loadSettings()">↻ Refresh</button>
+    </div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;margin-bottom:32px;">
+      <div style="font-size:0.78rem;color:#8b949e;margin-bottom:14px;line-height:1.6;">
+        Edit konfigurasi platform tanpa harus SSH ke server. Beberapa perubahan butuh restart Portal (klik "Layanan" di bawah).<br>
+        <span style="color:#f0883e;">⚠ Pengaturan read-only (DOMAIN, ADMIN_USERNAME, ADMIN_EMAIL) hanya bisa diubah via SSH karena pengaruhnya luas.</span>
+      </div>
+      <div id="readOnlySettings" style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:12px;margin-bottom:16px;font-size:.78rem;font-family:monospace;color:#8b949e;">
+        Memuat...
+      </div>
+      <div id="settingsForm">Memuat pengaturan...</div>
+      <div class="alert" id="settingsAlert"></div>
+      <div style="margin-top:14px;text-align:right;">
+        <button class="btn-primary" onclick="saveSettings()">💾 Simpan Pengaturan</button>
+      </div>
+    </div>
+
+    <!-- ===== Backup ===== -->
+    <div class="section-title">
+      💾 Backup Database & Workspace
+      <button class="refresh-btn" onclick="loadBackups()">↻ Refresh</button>
+    </div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;margin-bottom:32px;">
+      <div style="font-size:0.78rem;color:#8b949e;margin-bottom:14px;line-height:1.6;">
+        Backup berisi: dump PostgreSQL semua DB, dump MySQL semua DB, tar workspace user, copy <code>.env</code>.<br>
+        Backup otomatis tiap hari jam 2 pagi (kalau cron sudah dipasang) — disimpan di <code>/opt/devplatform/backups/</code>.<br>
+        Klik <strong>Download</strong> untuk turunkan ke laptop kakak. Klik <strong>Buat Backup</strong> untuk backup manual sekarang.
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+        <button class="btn-primary" onclick="createBackup()" id="btnCreateBackup">📦 Buat Backup Sekarang</button>
+        <span id="backupStatus" style="font-size:.8rem;color:#8b949e;"></span>
+      </div>
+      <div class="alert" id="backupAlert"></div>
+      <div class="table-wrapper" style="margin-top:8px;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:90px;">Kategori</th>
+              <th>Timestamp</th>
+              <th style="width:100px;">Ukuran</th>
+              <th style="width:240px;">File</th>
+              <th style="width:200px;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="backupsTableBody">
+            <tr><td colspan="5" style="text-align:center;color:#6e7681;padding:20px;">Memuat backup...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== Layanan (Services) ===== -->
+    <div class="section-title">
+      🐳 Layanan & Container
+      <button class="refresh-btn" onclick="loadServices()">↻ Refresh</button>
+    </div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;margin-bottom:32px;">
+      <div style="font-size:0.78rem;color:#8b949e;margin-bottom:14px;line-height:1.6;">
+        Status semua container utama. Tombol <strong>Restart</strong> berguna kalau service nge-hang (502 di Nginx, pgAdmin lambat, dll).<br>
+        <span style="color:#f0883e;">⚠ Restart Portal akan membuat halaman ini hang sebentar — refresh manual setelah 10 detik.</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Layanan</th>
+              <th style="width:130px;">Status</th>
+              <th>Detail</th>
+              <th style="width:140px;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="servicesTableBody">
+            <tr><td colspan="4" style="text-align:center;color:#6e7681;padding:20px;">Memuat...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Restart -->
+  <div class="modal-overlay" id="restartModal">
+    <div class="modal">
+      <h3>🔄 Restart Layanan</h3>
+      <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:14px;">
+        Yakin ingin restart <strong id="restartTarget" style="color:#58a6ff;"></strong>?
+      </p>
+      <p style="font-size:.78rem;color:#f0883e;margin-bottom:14px;" id="restartWarning"></p>
+      <div class="alert" id="restartAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('restartModal')">Batal</button>
+        <button class="btn-primary" onclick="confirmRestart()">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Hapus Backup -->
+  <div class="modal-overlay" id="deleteBackupModal">
+    <div class="modal">
+      <h3 style="color:#f85149;">🗑️ Hapus Backup</h3>
+      <input type="hidden" id="delBackupCategory">
+      <input type="hidden" id="delBackupTimestamp">
+      <p style="font-size:.85rem;color:#c9d1d9;margin-bottom:8px;">
+        Hapus backup <strong id="delBackupId" style="color:#f85149;"></strong>?
+      </p>
+      <p style="font-size:.78rem;color:#f0883e;margin-bottom:14px;">⚠ Tidak bisa di-undo. Pastikan sudah download dulu kalau perlu.</p>
+      <div class="alert" id="deleteBackupAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('deleteBackupModal')">Batal</button>
+        <button class="btn-primary" style="background:#da3633;" onclick="confirmDeleteBackup()">Hapus</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal Tambah User -->
@@ -386,8 +501,194 @@
       if (myRem) myRem.textContent = `${host}:3306`;
       loadUsers();
       loadAudit();
+      loadSettings();
+      loadBackups();
+      loadServices();
       setInterval(loadUsers, 15000);
       setInterval(loadAudit, 30000);
+      setInterval(loadServices, 20000);
+    }
+
+    // ===== Pengaturan =====
+    let currentSettings = {};
+    async function loadSettings() {
+      const res = await fetch('/admin/settings');
+      if (!res.ok) return;
+      const data = await res.json();
+      currentSettings = data.editable;
+
+      const ro = data.readOnly || {};
+      document.getElementById('readOnlySettings').innerHTML = Object.entries(ro).map(([k, v]) =>
+        `<div><span style="color:#6e7681;">${escHtml(k)}=</span><span style="color:#79c0ff;">${escHtml(v)}</span></div>`
+      ).join('') || '<span style="color:#6e7681;">(kosong)</span>';
+
+      const form = document.getElementById('settingsForm');
+      form.innerHTML = Object.entries(data.editable).map(([key, meta]) => `
+        <div style="margin-bottom:16px;padding:12px;background:#0d1117;border:1px solid #21262d;border-radius:6px;">
+          <label style="display:block;font-weight:600;color:#f0f6fc;font-size:.85rem;margin-bottom:4px;">
+            ${escHtml(meta.label)}
+            <span style="color:#6e7681;font-weight:400;font-size:.72rem;margin-left:6px;">(${escHtml(key)})</span>
+          </label>
+          <div style="font-size:.75rem;color:#8b949e;margin-bottom:8px;line-height:1.5;">${escHtml(meta.description)}</div>
+          <input type="${meta.type === 'number' ? 'number' : 'text'}"
+                 id="setting_${escHtml(key)}"
+                 value="${escHtml(meta.currentValue)}"
+                 ${meta.min !== undefined ? `min="${meta.min}"` : ''}
+                 ${meta.max !== undefined ? `max="${meta.max}"` : ''}
+                 style="width:100%;padding:8px 10px;background:#0d1117;border:1px solid #30363d;border-radius:5px;color:#c9d1d9;font-family:monospace;font-size:.85rem;"
+                 placeholder="default: ${escHtml(meta.default)}">
+        </div>
+      `).join('');
+    }
+
+    async function saveSettings() {
+      const alertEl = document.getElementById('settingsAlert');
+      const updates = {};
+      for (const key of Object.keys(currentSettings)) {
+        const el = document.getElementById(`setting_${key}`);
+        if (el) updates[key] = el.value;
+      }
+      alertEl.className = 'alert';
+      alertEl.textContent = 'Menyimpan...';
+      alertEl.style.display = 'block';
+
+      const res = await csrfFetch('/admin/settings', { method: 'POST', body: updates });
+      const data = await res.json();
+      alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
+      alertEl.textContent = data.message + (data.note ? ' ' + data.note : '');
+      if (data.success) loadSettings();
+    }
+
+    // ===== Backup =====
+    async function loadBackups() {
+      const res = await fetch('/admin/backups');
+      if (!res.ok) return;
+      const data = await res.json();
+      const tbody = document.getElementById('backupsTableBody');
+      const list = data.backups || [];
+      if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#6e7681;padding:20px;">Belum ada backup. Klik "Buat Backup Sekarang" untuk mulai.</td></tr>`;
+        return;
+      }
+      const catColor = { manual: '#58a6ff', daily: '#3fb950', weekly: '#f0883e', monthly: '#bc8cff' };
+      tbody.innerHTML = list.map(b => {
+        const fileList = b.files.map(f => `<div style="font-size:.7rem;color:#6e7681;">${escHtml(f.name)} (${(f.size/1024/1024).toFixed(1)}MB)</div>`).join('');
+        return `<tr>
+          <td><span class="badge" style="color:${catColor[b.category]||'#8b949e'};border-color:${catColor[b.category]||'#30363d'};">${escHtml(b.category)}</span></td>
+          <td style="font-family:monospace;font-size:.78rem;color:#c9d1d9;">${escHtml(b.timestamp)}</td>
+          <td style="color:#f0f6fc;font-weight:600;">${escHtml(b.sizeMB)} MB</td>
+          <td>${fileList || '<span style="color:#6e7681;">(kosong)</span>'}</td>
+          <td>
+            <a class="action-btn" style="text-decoration:none;border-color:#3fb950;color:#3fb950;" href="/admin/backups/download/${encodeURIComponent(b.category)}/${encodeURIComponent(b.timestamp)}">⬇ Download</a>
+            <button class="action-btn danger" onclick="openDeleteBackup('${escHtml(b.category)}','${escHtml(b.timestamp)}')">Hapus</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function createBackup() {
+      const btn = document.getElementById('btnCreateBackup');
+      const alertEl = document.getElementById('backupAlert');
+      const status = document.getElementById('backupStatus');
+      btn.disabled = true; btn.textContent = '⏳ Sedang backup (1-3 menit)...';
+      status.textContent = 'pg_dump → mysqldump → tar workspace...';
+      alertEl.style.display = 'none';
+
+      try {
+        const res = await csrfFetch('/admin/backups/create', { method: 'POST', body: {} });
+        const data = await res.json();
+        alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
+        alertEl.textContent = data.message + (data.errors && data.errors.length ? ' Errors: ' + data.errors.join('; ') : '');
+        alertEl.style.display = 'block';
+        loadBackups();
+      } catch (e) {
+        alertEl.className = 'alert error';
+        alertEl.textContent = 'Gagal: ' + e.message;
+        alertEl.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = '📦 Buat Backup Sekarang';
+        status.textContent = '';
+      }
+    }
+
+    function openDeleteBackup(category, timestamp) {
+      document.getElementById('delBackupCategory').value = category;
+      document.getElementById('delBackupTimestamp').value = timestamp;
+      document.getElementById('delBackupId').textContent = `${category}/${timestamp}`;
+      document.getElementById('deleteBackupAlert').style.display = 'none';
+      document.getElementById('deleteBackupModal').classList.add('open');
+    }
+
+    async function confirmDeleteBackup() {
+      const category = document.getElementById('delBackupCategory').value;
+      const timestamp = document.getElementById('delBackupTimestamp').value;
+      const alertEl = document.getElementById('deleteBackupAlert');
+      const res = await csrfFetch('/admin/backups/delete', { method: 'POST', body: { category, timestamp, confirm: `${category}/${timestamp}` } });
+      const data = await res.json();
+      alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
+      alertEl.textContent = data.message;
+      alertEl.style.display = 'block';
+      if (data.success) {
+        setTimeout(() => { closeModal('deleteBackupModal'); loadBackups(); }, 800);
+      }
+    }
+
+    // ===== Services =====
+    async function loadServices() {
+      const res = await fetch('/admin/services');
+      if (!res.ok) return;
+      const data = await res.json();
+      const tbody = document.getElementById('servicesTableBody');
+      if (!data.success) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:#f85149;padding:20px;">${escHtml(data.message || 'Gagal baca status')}</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = (data.services || []).map(s => {
+        const dotClass = s.state === 'running' ? 'running' : s.state === 'missing' ? 'notfound' : 'stopped';
+        return `<tr>
+          <td>
+            <div style="font-weight:600;color:#f0f6fc;">${escHtml(s.label)} ${s.critical ? '<span style="color:#f0883e;font-size:.7rem;">(kritis)</span>' : ''}</div>
+            <div style="font-size:.7rem;color:#6e7681;font-family:monospace;">${escHtml(s.name)}</div>
+          </td>
+          <td><span class="status-dot ${dotClass}"></span>${escHtml(s.state)}</td>
+          <td style="font-size:.78rem;color:#8b949e;">${escHtml(s.status || '-')}</td>
+          <td>
+            ${s.allowRestart && s.state !== 'missing'
+              ? `<button class="action-btn" onclick="openRestart('${escHtml(s.name)}','${escHtml(s.label)}',${s.critical})">🔄 Restart</button>`
+              : '<span style="color:#6e7681;font-size:.75rem;">–</span>'}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openRestart(name, label, critical) {
+      document.getElementById('restartTarget').textContent = `${label} (${name})`;
+      document.getElementById('restartTarget').dataset.name = name;
+      document.getElementById('restartWarning').textContent = name === 'devplatform-portal'
+        ? '⚠ Portal akan restart sendiri — halaman ini akan hang sebentar. Refresh manual setelah 10-15 detik.'
+        : (critical ? '⚠ Layanan kritis — semua user mungkin terdampak sebentar.' : '');
+      document.getElementById('restartAlert').style.display = 'none';
+      document.getElementById('restartModal').classList.add('open');
+    }
+
+    async function confirmRestart() {
+      const name = document.getElementById('restartTarget').dataset.name;
+      const alertEl = document.getElementById('restartAlert');
+      alertEl.className = 'alert';
+      alertEl.textContent = 'Sedang restart...';
+      alertEl.style.display = 'block';
+      try {
+        const res = await csrfFetch('/admin/services/restart', { method: 'POST', body: { name } });
+        const data = await res.json();
+        alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
+        alertEl.textContent = data.message;
+        if (data.success && !data.portalSelfRestart) {
+          setTimeout(() => { closeModal('restartModal'); loadServices(); }, 1500);
+        }
+      } catch (e) {
+        alertEl.className = 'alert error';
+        alertEl.textContent = 'Error: ' + e.message;
+      }
     }
 
     async function loadAudit() {

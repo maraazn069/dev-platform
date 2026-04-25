@@ -917,32 +917,38 @@ Web UI untuk admin browse, upload, download, edit, dan hapus file di
 - Edit file config user (mis. `.env` di project) tanpa harus exec ke container
 - Cek penggunaan disk per folder
 
-**Reset password admin filebrowser kalau lupa:**
+**Reset / fix password admin filebrowser kalau lupa atau gak bisa login:**
 
-⚠️ JANGAN pakai `docker exec` — image filebrowser:s6 mengunci database, bakal `Error: timeout`. Pakai cara ini:
+⚠️ Image `filebrowser:s6` punya bug: binary-nya BUKAN di `/filebrowser` (issue #5167).
+Project ini sekarang pakai image `filebrowser/filebrowser:v2.30.0` (non-s6) yang stabil.
+
+Cara paling cepat (script otomatis baca `.env` & re-create user admin):
 ```bash
 cd ~/dev-platform
+sudo bash scripts/sync-admin-password.sh
+```
 
-# 1. Stop filebrowser (lepas lock database)
-sudo docker compose stop filebrowser
+Cara manual kalau script-nya error:
+```bash
+cd ~/dev-platform
+PASS=$(sudo grep '^ADMIN_PASSWORD=' .env | cut -d= -f2-)
+USR=$(sudo grep '^ADMIN_USERNAME=' .env | cut -d= -f2-)
+USR=${USR:-admin}
+FB_VOL=$(sudo docker inspect devplatform-filebrowser --format '{{range .Mounts}}{{if eq .Destination "/database"}}{{.Name}}{{end}}{{end}}')
 
-# 2. Update password via container sementara yang mount volume yang sama
-sudo docker run --rm \
-  -v dev-platform_filebrowser_db:/database \
-  filebrowser/filebrowser:s6 \
-  /filebrowser users update admin --password "PasswordBaruKuat123" \
-  --database /database/filebrowser.db
-
-# 3. Start lagi filebrowser
-sudo docker compose start filebrowser
-sleep 3
-sudo docker logs devplatform-filebrowser --tail 5
+sudo docker stop devplatform-filebrowser
+# WAJIB pakai image v2.30.0 (non-s6), bukan :s6 — di :s6 binary /filebrowser GAK ADA
+sudo docker run --rm -v "${FB_VOL}":/database --entrypoint /filebrowser \
+  filebrowser/filebrowser:v2.30.0 users rm "$USR" --database /database/filebrowser.db 2>/dev/null || true
+sudo docker run --rm -v "${FB_VOL}":/database --entrypoint /filebrowser \
+  filebrowser/filebrowser:v2.30.0 users add "$USR" "$PASS" --perm.admin --database /database/filebrowser.db
+sudo docker start devplatform-filebrowser
 ```
 
 **Tambah user kedua di filebrowser** (mis. read-only viewer):
 ```bash
 sudo docker exec devplatform-filebrowser \
-  filebrowser users add viewer "PasswordViewer123" \
+  /filebrowser users add viewer "PasswordViewer123" \
   --perm.admin=false --perm.delete=false --perm.modify=false \
   --database /database/filebrowser.db
 ```
@@ -953,6 +959,55 @@ sudo docker compose stop filebrowser
 sudo docker compose rm -f filebrowser
 # Hapus dari nginx config: hapus block server_name files.DOMAIN; reload nginx
 ```
+
+---
+
+## 1️⃣3️⃣C Panel Admin — Pengaturan, Backup, & Layanan (No SSH!)
+
+Halaman `https://dev.netprem.org/admin` sekarang punya 3 section baru paling bawah:
+
+### ⚙️ Pengaturan Platform
+Edit konfigurasi platform tanpa SSH ke `.env`. Yang bisa diubah dari web:
+
+| Setting | Gunanya | Default |
+|---|---|---|
+| `IDLE_TIMEOUT_MIN` | Berapa menit container code-server idle sebelum mati otomatis | 60 |
+| `CODE_SERVER_MEM` | Batas RAM per container user (mis. `2g`) | 2g |
+| `CODE_SERVER_CPUS` | Batas CPU core per container user | 1.5 |
+| `CODE_SERVER_PIDS` | Max process per container (anti fork-bomb) | 300 |
+| `DB_REMOTE_IPS` | IP/CIDR yang boleh konek ke MySQL/PG dari luar VPS | (kosong = semua) |
+| `TZ` | Timezone semua container | Asia/Jakarta |
+
+⚠️ Yang **read-only** dari web (harus SSH edit `.env`):
+- `DOMAIN` (ganti = harus regen sertifikat HTTPS)
+- `ADMIN_USERNAME`, `ADMIN_EMAIL` (ganti = harus migrate user data)
+- `PROTOCOL`, password DB (kepanjangan dampaknya, harus paham resiko)
+
+Setelah klik **💾 Simpan Pengaturan**, beberapa setting baru aktif setelah Portal direstart — klik tombol **🔄 Restart** di section "Layanan" di bawahnya, atau jalankan: `sudo docker compose restart portal`.
+
+### 💾 Backup Database & Workspace
+- **Buat Backup Sekarang** — klik tombol, server jalanin pg_dumpall + mysqldump + tar workspace + copy `.env`. Hasil disimpan di `/opt/devplatform/backups/manual/<timestamp>/`. Butuh 1-3 menit tergantung ukuran data.
+- **Tabel daftar backup** — semua backup (manual + harian/mingguan/bulanan dari cron) tampil dengan ukuran & list file.
+- **⬇ Download** — klik untuk turunin `.tar.gz` ke laptop kakak. Gak perlu SSH/SFTP lagi.
+- **🗑 Hapus** — buat hapus backup lama (rotation otomatis dari cron sudah ada, tapi bisa di-trigger manual).
+
+⚠️ **Restore** belum ada di web (resiko terlalu tinggi). Untuk restore:
+```bash
+# Di VPS, dari folder backup yang sudah didownload ulang ke /tmp/restore/<ts>/
+sudo bash scripts/restore.sh /tmp/restore/<ts>/    # TODO: belum dibuat — contact admin
+# Atau manual:
+sudo gunzip -c /tmp/restore/postgres-all.sql.gz | sudo docker exec -i devplatform-postgres psql -U postgres
+sudo gunzip -c /tmp/restore/mysql-all.sql.gz | sudo docker exec -i devplatform-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD"
+sudo tar -xzf /tmp/restore/workspace.tar.gz -C /opt/devplatform/
+```
+
+### 🐳 Layanan & Container
+List semua container kritis (Portal, Nginx, Postgres, MySQL, pgAdmin, phpMyAdmin, FileBrowser) dengan status real-time + tombol **🔄 Restart** per service. Berguna kalau:
+- Nginx ngasih 502 → klik Restart Nginx
+- pgAdmin lambat → klik Restart pgAdmin
+- File Browser hang → klik Restart File Browser
+
+⚠️ Restart Portal akan bikin halaman ini hang ~10 detik (Portal restart = web admin mati sebentar). Refresh browser setelah 10-15 detik.
 
 ---
 

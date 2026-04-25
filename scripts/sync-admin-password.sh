@@ -50,12 +50,14 @@ else
   sleep 2
 
   # Helper: jalankan FB CLI di transient container.
-  # Pakai path absolut /filebrowser (binary di image :s6 ada di root, bukan di PATH).
+  # WAJIB pakai image non-s6 (v2.30.0) — image :s6 binary-nya di subfolder
+  # service s6, bukan di /filebrowser, jadi `--entrypoint /filebrowser` GAGAL.
+  # Issue: https://github.com/filebrowser/filebrowser/issues/5167
   fb_cli() {
     docker run --rm \
       -v "${FB_VOLUME}":/database \
       --entrypoint /filebrowser \
-      filebrowser/filebrowser:s6 \
+      filebrowser/filebrowser:v2.30.0 \
       "$@" --database /database/filebrowser.db 2>&1
   }
 
