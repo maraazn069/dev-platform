@@ -609,39 +609,52 @@ sudo docker restart nginx-proxy # reload nginx
 
 ---
 
-## 9️⃣ Akun Default Pasca-Install
+## 9️⃣ Akun Admin Tunggal (Unified Login)
 
-### Admin Portal (utama)
-- Username & password **di-set saat install** (installer nanya manual).
-- Login langsung di `https://dev.netprem.org` — **tidak perlu force-change** karena
-  password sudah dipilih sendiri.
-- Lupa password? Reset di VPS:
-  ```bash
-  cd ~/dev-platform
-  sudo nano .env
-  # ubah ADMIN_PASSWORD=PasswordBaru
-  sudo rm -f server/data/users.json
-  sudo docker compose restart portal
-  ```
+Mulai dari versi sekarang, **1 akun admin = 1 username + 1 email + 1 password** untuk SEMUA admin login:
+Portal, File Browser, dan pgAdmin pakai akun yang sama.
 
-### File Browser
-- URL: `https://files.dev.netprem.org`
-- Login pertama: username `admin` / password `admin`
-- ⚠️ **WAJIB ganti password** setelah login pertama (pojok kanan atas → Settings → Profile)
-- Lupa password filebrowser? Lihat section "Reset password admin filebrowser" di bawah
+### Setup Pertama
+- Installer nanya: username (default `admin`), email (default `admin@<domain>`), password (min 10 char, ketik manual).
+- Otomatis di-bootstrap ke File Browser & pgAdmin di akhir install.
+- Tersimpan di `.env`: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `PGADMIN_EMAIL`, `PGADMIN_PASSWORD`.
 
-### pgAdmin / phpMyAdmin
-- pgAdmin: email & password sesuai input saat install (di `.env` field `PGADMIN_EMAIL` & `PGADMIN_PASSWORD`)
-- phpMyAdmin: login dengan user MySQL biasa (root + `MYSQL_ROOT_PASSWORD` dari `.env`)
+### Ganti Password (Auto-Sync)
+1. Login ke Portal `https://dev.netprem.org/dashboard`
+2. Klik tombol **🔑 Ganti Password**
+3. Isi password lama + baru → **Simpan**
+4. Otomatis ke-sync ke File Browser & pgAdmin di latar belakang
+5. Cek hasil sync di Admin → tab **Audit Log** (cari event `password.sync_admin`)
 
-### Portainer (manajemen Docker)
-- URL: `http://20.200.209.228:9000` (akses via SSH tunnel saja)
-- Setup admin pertama kali saat buka URL pertama (set password sendiri)
+⚠️ Sync ini hanya jalan kalau yang ganti adalah user dengan role `admin`.
 
-### User VS Code (code-server)
-- Tambah user baru: `sudo bash scripts/add-user.sh namauser passwordnya 8082`
-- User baru otomatis `mustChangePassword=true` → diminta ganti password saat login pertama
-- Akses VS Code-nya: `https://namauser.dev.netprem.org`
+### Lupa Password Admin
+```bash
+ssh root@20.200.209.228
+cd ~/dev-platform
+sudo nano .env
+# ubah ADMIN_PASSWORD=PasswordBaru12345
+sudo rm -f server/data/users.json
+sudo docker compose restart portal
+sleep 5
+sudo docker logs devplatform-portal --tail 5
+# Harus muncul: "Admin user created: admin (password dari .env, tidak force-change)"
+
+# Sync ke File Browser & pgAdmin manual
+sudo docker compose stop filebrowser
+sudo docker run --rm -v dev-platform_filebrowser_db:/database --entrypoint filebrowser \
+  filebrowser/filebrowser:s6 users update admin --password "PasswordBaru12345" \
+  --database /database/filebrowser.db
+sudo docker compose start filebrowser
+
+sudo docker exec devplatform-pgadmin /venv/bin/python /pgadmin4/setup.py update-password \
+  --user admin@dev.netprem.org --password "PasswordBaru12345"
+```
+
+### Service Lain (Tidak Termasuk Unified)
+- **phpMyAdmin** → login pakai user MySQL biasa (`root` + `MYSQL_ROOT_PASSWORD` dari `.env`)
+- **Portainer** → setup admin sendiri saat buka URL pertama (`http://IP:9000`)
+- **User VS Code** → tambah via `sudo bash scripts/add-user.sh namauser password port` — user diminta ganti password saat login pertama. Akses VS Code: `https://namauser.dev.netprem.org`
 
 ---
 

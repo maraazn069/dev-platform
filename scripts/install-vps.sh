@@ -62,20 +62,20 @@ if [ -z "$PG_PASS" ]; then PG_PASS=$(openssl rand -base64 20); fi
 read -p "$(echo -e ${YELLOW})Password MySQL root (Enter untuk auto-generate): $(echo -e ${NC})" MYSQL_ROOT_PASS
 if [ -z "$MYSQL_ROOT_PASS" ]; then MYSQL_ROOT_PASS=$(openssl rand -base64 20); fi
 
-read -p "$(echo -e ${YELLOW})Email login pgAdmin (Enter untuk admin@local.dev): $(echo -e ${NC})" PGADMIN_EMAIL
-if [ -z "$PGADMIN_EMAIL" ]; then PGADMIN_EMAIL="admin@local.dev"; fi
-
-read -p "$(echo -e ${YELLOW})Password pgAdmin (Enter untuk auto-generate): $(echo -e ${NC})" PGADMIN_PASSWORD
-if [ -z "$PGADMIN_PASSWORD" ]; then PGADMIN_PASSWORD=$(openssl rand -base64 16); fi
-
 echo ""
-echo -e "${BOLD}Akun Admin Portal${NC}"
-echo -e "${YELLOW}Akun ini untuk login ke https://DOMAIN/admin (kelola user, project, dll)${NC}"
-read -p "$(echo -e ${YELLOW})Username admin portal (Enter untuk 'admin'): $(echo -e ${NC})" ADMIN_USERNAME
+echo -e "${BOLD}═══ Akun Admin Tunggal ═══${NC}"
+echo -e "${YELLOW}Akun ini dipakai untuk SEMUA admin login: Portal, File Browser, dan pgAdmin."
+echo -e "Pas kakak ganti password di Portal, otomatis ke-sync ke File Browser & pgAdmin.${NC}"
+echo ""
+read -p "$(echo -e ${YELLOW})Username admin (Enter untuk 'admin'): $(echo -e ${NC})" ADMIN_USERNAME
 if [ -z "$ADMIN_USERNAME" ]; then ADMIN_USERNAME="admin"; fi
 
+DEFAULT_ADMIN_EMAIL="admin@${DOMAIN}"
+read -p "$(echo -e ${YELLOW})Email admin (Enter untuk $DEFAULT_ADMIN_EMAIL): $(echo -e ${NC})" ADMIN_EMAIL
+if [ -z "$ADMIN_EMAIL" ]; then ADMIN_EMAIL="$DEFAULT_ADMIN_EMAIL"; fi
+
 while true; do
-  read -s -p "$(echo -e ${YELLOW})Password admin portal (min 10 karakter, ketik manual): $(echo -e ${NC})" ADMIN_PASSWORD
+  read -s -p "$(echo -e ${YELLOW})Password admin (min 10 karakter, ketik manual): $(echo -e ${NC})" ADMIN_PASSWORD
   echo ""
   if [ -z "$ADMIN_PASSWORD" ]; then
     ADMIN_PASSWORD=$(openssl rand -base64 14)
@@ -99,8 +99,10 @@ while true; do
   break
 done
 
-read -p "$(echo -e ${YELLOW})Email admin portal (Enter untuk skip): $(echo -e ${NC})" ADMIN_EMAIL
-ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+# pgAdmin pakai kredensial admin yg sama (unified login)
+PGADMIN_EMAIL="$ADMIN_EMAIL"
+PGADMIN_PASSWORD="$ADMIN_PASSWORD"
+echo -e "${GREEN}✓ pgAdmin & File Browser akan pakai akun admin yang sama${NC}"
 
 echo ""
 echo -e "${BOLD}Akses Remote Database${NC}"
@@ -416,6 +418,53 @@ fi
 docker compose restart nginx
 sleep 3
 
+# === Bootstrap akun unified ke File Browser & pgAdmin ===
+echo ""
+echo -e "${CYAN}Sync akun admin tunggal ke File Browser & pgAdmin...${NC}"
+
+# Deteksi volume File Browser dari container (lebih reliable daripada nebak nama)
+FB_VOLUME=$(docker inspect devplatform-filebrowser --format '{{range .Mounts}}{{if eq .Destination "/database"}}{{.Name}}{{end}}{{end}}' 2>/dev/null)
+
+if [ -z "$FB_VOLUME" ]; then
+  echo -e "${YELLOW}⚠ Container devplatform-filebrowser belum siap, skip sync File Browser${NC}"
+  echo -e "${YELLOW}  Default: admin/admin — kakak bisa ganti manual via UI nanti${NC}"
+else
+  # 1. File Browser: stop, update admin password, start
+  docker stop devplatform-filebrowser >/dev/null 2>&1
+  sleep 2
+  FB_RESULT=$(docker run --rm \
+    -v "${FB_VOLUME}":/database \
+    --entrypoint filebrowser \
+    filebrowser/filebrowser:s6 \
+    users update admin --password "$ADMIN_PASSWORD" \
+    --database /database/filebrowser.db 2>&1)
+  # Selalu start container lagi, bahkan kalau update gagal
+  docker start devplatform-filebrowser >/dev/null 2>&1
+  sleep 3
+  if echo "$FB_RESULT" | grep -qi "error"; then
+    echo -e "${YELLOW}⚠ File Browser sync gagal — login default admin/admin masih aktif${NC}"
+    echo "$FB_RESULT" | tail -3
+  else
+    echo -e "${GREEN}✓ File Browser admin di-sync ke kredensial portal${NC}"
+  fi
+fi
+
+# 2. pgAdmin: tunggu siap, lalu update password (kalau email beda dr default install)
+echo -e "${CYAN}Menunggu pgAdmin siap...${NC}"
+for i in 1 2 3 4 5 6 7 8; do
+  if docker exec devplatform-pgadmin test -f /pgadmin4/setup.py 2>/dev/null; then
+    PG_RESULT=$(docker exec devplatform-pgadmin /venv/bin/python /pgadmin4/setup.py update-password \
+      --user "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>&1)
+    if echo "$PG_RESULT" | grep -qi "error\|fail"; then
+      echo -e "${YELLOW}⚠ pgAdmin sync skipped (akan dipakai dari env saat first-boot)${NC}"
+    else
+      echo -e "${GREEN}✓ pgAdmin admin di-sync${NC}"
+    fi
+    break
+  fi
+  sleep 4
+done
+
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP-VPS-mu")
 
 echo ""
@@ -428,10 +477,12 @@ echo -e "${BOLD}Akses Platform:${NC}"
 echo -e "  Via domain  : ${CYAN}http://$DOMAIN${NC}"
 echo -e "  Via IP      : ${CYAN}http://$SERVER_IP${NC} (redirect ke domain)"
 echo ""
-echo -e "${BOLD}Login Default:${NC}"
-echo -e "  Admin  : username ${YELLOW}$ADMIN_USERNAME${NC}  / password ${YELLOW}(yang kakak set saat install)${NC}"
-echo -e "  ${GREEN}Login langsung tanpa wajib ganti password (sudah di-set saat install).${NC}"
-echo -e "  ${YELLOW}Untuk tambah user baru: sudo bash scripts/add-user.sh namauser password port${NC}"
+echo -e "${BOLD}Akun Admin Tunggal (untuk Portal, File Browser, pgAdmin):${NC}"
+echo -e "  Username : ${YELLOW}$ADMIN_USERNAME${NC}"
+echo -e "  Email    : ${YELLOW}$ADMIN_EMAIL${NC}"
+echo -e "  Password : ${YELLOW}(yang kakak set saat install)${NC}"
+echo -e "  ${GREEN}Pas ganti password di Portal → otomatis ke-sync ke File Browser & pgAdmin${NC}"
+echo -e "  ${YELLOW}Tambah user baru: sudo bash scripts/add-user.sh namauser password port${NC}"
 echo ""
 echo -e "${BOLD}Kredensial Database (simpan baik-baik!):${NC}"
 echo -e "  PostgreSQL password : ${YELLOW}$PG_PASS${NC}"
@@ -440,10 +491,9 @@ echo ""
 echo -e "${BOLD}Web UI Database & File:${NC}"
 echo -e "  phpMyAdmin (MySQL)   : ${CYAN}https://mysql.$DOMAIN${NC}  (root / $MYSQL_ROOT_PASS)"
 echo -e "  pgAdmin (PostgreSQL) : ${CYAN}https://pgadmin.$DOMAIN${NC}"
-echo -e "    Login email      : ${YELLOW}$PGADMIN_EMAIL${NC}"
-echo -e "    Login password   : ${YELLOW}$PGADMIN_PASSWORD${NC}"
+echo -e "    Login            : ${YELLOW}$ADMIN_EMAIL${NC} + password admin di atas"
 echo -e "  File Browser         : ${CYAN}https://files.$DOMAIN${NC}"
-echo -e "    Login pertama    : ${YELLOW}admin / admin${NC}  ${RED}(WAJIB ganti password setelah login!)${NC}"
+echo -e "    Login            : ${YELLOW}$ADMIN_USERNAME${NC} + password admin di atas"
 echo ""
 echo -e "${YELLOW}Langkah selanjutnya (WAJIB):${NC}"
 echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"

@@ -104,7 +104,32 @@ router.post('/change-password', (req, res) => {
   req.session.user.mustChangePassword = false;
 
   audit.log('password.changed', { username: users[idx].username }, req);
-  res.json({ success: true, message: 'Password berhasil diubah.' });
+
+  // Sync ke File Browser & pgAdmin kalau yang ganti adalah admin (best-effort, async)
+  if (users[idx].role === 'admin') {
+    const { syncAdminPassword } = require('../services/credentialSync');
+    syncAdminPassword({
+      username: users[idx].username,
+      email: users[idx].email,
+      password: newPassword
+    }).then((result) => {
+      audit.log('password.sync_admin', {
+        username: users[idx].username,
+        filebrowser: result.filebrowser?.ok ? 'ok' : (result.filebrowser?.message || 'failed'),
+        pgadmin: result.pgadmin?.ok ? 'ok' : (result.pgadmin?.message || 'failed'),
+        env: result.env?.ok ? 'ok' : (result.env?.message || 'failed')
+      }, req);
+    }).catch((e) => {
+      audit.log('password.sync_admin_error', { error: e.message }, req);
+    });
+  }
+
+  res.json({
+    success: true,
+    message: users[idx].role === 'admin'
+      ? 'Password berhasil diubah. File Browser & pgAdmin sedang di-sync di latar belakang (cek audit log).'
+      : 'Password berhasil diubah.'
+  });
 });
 
 router.post('/change-email', (req, res) => {
