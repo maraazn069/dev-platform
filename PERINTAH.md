@@ -609,14 +609,39 @@ sudo docker restart nginx-proxy # reload nginx
 
 ---
 
-## 9️⃣ Login Default (Ganti Setelah Install!)
+## 9️⃣ Akun Default Pasca-Install
 
-| Akun | Username | Password |
-|------|----------|----------|
-| Admin Portal | `admin` | `admin123` |
-| User Demo | `user1` | `user1234` |
+### Admin Portal (utama)
+- Username & password **di-set saat install** (installer nanya manual).
+- Login langsung di `https://dev.netprem.org` — **tidak perlu force-change** karena
+  password sudah dipilih sendiri.
+- Lupa password? Reset di VPS:
+  ```bash
+  cd ~/dev-platform
+  sudo nano .env
+  # ubah ADMIN_PASSWORD=PasswordBaru
+  sudo rm -f server/data/users.json
+  sudo docker compose restart portal
+  ```
 
-⚠️ **WAJIB** ganti password ini setelah login pertama via menu Pengaturan Akun di dashboard.
+### File Browser
+- URL: `https://files.dev.netprem.org`
+- Login pertama: username `admin` / password `admin`
+- ⚠️ **WAJIB ganti password** setelah login pertama (pojok kanan atas → Settings → Profile)
+- Lupa password filebrowser? Lihat section "Reset password admin filebrowser" di bawah
+
+### pgAdmin / phpMyAdmin
+- pgAdmin: email & password sesuai input saat install (di `.env` field `PGADMIN_EMAIL` & `PGADMIN_PASSWORD`)
+- phpMyAdmin: login dengan user MySQL biasa (root + `MYSQL_ROOT_PASSWORD` dari `.env`)
+
+### Portainer (manajemen Docker)
+- URL: `http://20.200.209.228:9000` (akses via SSH tunnel saja)
+- Setup admin pertama kali saat buka URL pertama (set password sendiri)
+
+### User VS Code (code-server)
+- Tambah user baru: `sudo bash scripts/add-user.sh namauser passwordnya 8082`
+- User baru otomatis `mustChangePassword=true` → diminta ganti password saat login pertama
+- Akses VS Code-nya: `https://namauser.dev.netprem.org`
 
 ---
 
@@ -820,7 +845,10 @@ me-reset passwordnya.
 - ✅ Backup `.env` ke tempat aman (password manager)
 - ✅ Pasang cron backup harian: `sudo bash scripts/install-backup-cron.sh`
 - ✅ Hardening VPS sekali: `sudo bash scripts/harden-vps.sh`
-- ✅ Ganti password default `admin` & `user1` setelah install pertama (otomatis diminta)
+- ✅ Password admin di-set saat install (tidak ada default `admin123` lagi)
+- ✅ Tambah user baru via `add-user.sh` atau Panel Admin (user diminta ganti password saat login pertama)
+- ✅ Ganti password default File Browser `admin/admin` setelah login pertama
+- ✅ Ganti password default Portainer setelah setup pertama
 - ✅ Whitelist IP DB di `.env` (`DB_REMOTE_IPS`) — jangan biarkan kosong di production
 
 ### Variabel Penting di .env (Cek Setelah Install)
