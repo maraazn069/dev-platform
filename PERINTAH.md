@@ -1320,6 +1320,82 @@ List semua container kritis (Portal, Nginx, Postgres, MySQL, pgAdmin, phpMyAdmin
 
 ---
 
+## 1️⃣3️⃣F Uninstall Total + Install Fresh
+
+> Pakai kalau VPS udah berantakan (bug-bug lama, container conflict, data corrupt) dan
+> mau mulai dari nol. Source code repo + cert Let's Encrypt **tetap aman** (kecuali pakai `--nuke`).
+
+### Yang Dihapus
+- Semua container `devplatform-*` & `codeserver-*`
+- Semua docker volume (mysql_data, postgres_data, codeserver-*-config)
+- Semua data user di `/opt/devplatform/data/`
+- Semua nginx user conf + cert-queue
+- Cron jobs (cert-queue, backup) + log files
+- `users.json` di-reset (backup `.uninstalled-*` dibuat otomatis)
+
+### Yang Dipertahankan (Default)
+- ✅ Cert Let's Encrypt `/etc/letsencrypt/live/*` (hindari rate-limit 5×/week)
+- ✅ `/etc/cloudflare/cloudflare.ini` (token API)
+- ✅ File `.env` (password DB tetap sama setelah reinstall)
+- ✅ Source code repo di `/opt/devplatform`
+
+### Cara Pakai
+
+```bash
+cd /opt/devplatform
+sudo git pull origin main          # ambil script uninstall terbaru
+
+# 1) Uninstall (interactive, ketik UNINSTALL untuk konfirmasi)
+sudo bash scripts/uninstall-fresh.sh
+
+# 2) Install fresh
+sudo bash scripts/install-vps.sh         # bootstrap docker + nginx
+sudo bash scripts/setup-https.sh         # issue *.netprem.org cert
+sudo bash scripts/migrate-to-opsi-c.sh   # set struktur Opsi C
+sudo bash scripts/install-backup-cron.sh # pasang cron cert-queue + backup
+
+# 3) Login portal https://netprem.org → admin/admin → ganti password → tambah user
+```
+
+### Mode Nuclear (Hapus Cert + .env Juga)
+
+```bash
+sudo bash scripts/uninstall-fresh.sh --nuke
+# ⚠️ Cert akan di-issue ulang → kena rate-limit kalau >5×/week
+# ⚠️ Password DB akan baru semua → user lama tidak bisa login DB tanpa reset
+```
+
+### Skip Konfirmasi (Otomatisasi)
+
+```bash
+sudo bash scripts/uninstall-fresh.sh --force
+```
+
+---
+
+## 1️⃣3️⃣G Multi-Port Preview (Selain Port 3000)
+
+Default preview project route ke port **3000** (npm run dev, dst). Kalau dev server jalan
+di port lain, tambahin suffix `-<port>` di subdomain.
+
+| Subdomain                                 | Route ke port           | Contoh use case                    |
+|-------------------------------------------|-------------------------|------------------------------------|
+| `myapp.user1.netprem.org`                 | `3000` (default)        | `npm run dev`                      |
+| `myapp-8000.user1.netprem.org`            | `8000`                  | `python -m http.server 8000`       |
+| `myapp-5173.user1.netprem.org`            | `5173`                  | `vite dev`                         |
+| `myapp-8080.user1.netprem.org`            | `8080`                  | `php -S 0.0.0.0:8080`              |
+| `api-4000.user1.netprem.org`              | `4000`                  | Backend Express                    |
+
+**Range port valid:** `3000–9999` (nginx regex `[3-9][0-9]{3}`).
+
+**Catatan:**
+- Project name harus huruf kecil + angka aja, **tanpa** dash di nama project sendiri
+  (karena dash dipakai untuk separator port).
+- ❌ TIDAK BISA: `my-app.user1.netprem.org` (dash di nama project akan di-parse sebagai port)
+- ✅ BISA: `myapp.user1.netprem.org` atau `myapp-8000.user1.netprem.org`
+
+---
+
 ## 1️⃣4️⃣ Force Change Password
 
 User baru (atau yang di-reset password) **wajib ganti password** di login pertama:

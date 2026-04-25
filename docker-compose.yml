@@ -24,11 +24,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - SESSION_SECRET=${SESSION_SECRET}
-      - DOMAIN=${DOMAIN}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET wajib diset di .env (jalankan: openssl rand -hex 32)}
+      - DOMAIN=${DOMAIN:?DOMAIN wajib diset di .env (contoh: netprem.org)}
       - PROTOCOL=${PROTOCOL:-http}
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diset di .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diset di .env}
       - PGADMIN_EMAIL=${PGADMIN_EMAIL:-admin@local.dev}
       - PGADMIN_PASSWORD=${PGADMIN_PASSWORD:-admin123}
       - TZ=${TZ:-Asia/Jakarta}
@@ -93,7 +93,7 @@ services:
     environment:
       POSTGRES_DB: devplatform
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diset di .env}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -121,10 +121,10 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib diset di .env}
       MYSQL_DATABASE: devplatform_shared
       MYSQL_USER: admin
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD}}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./scripts/init-mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro

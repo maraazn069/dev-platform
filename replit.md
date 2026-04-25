@@ -457,3 +457,56 @@ Saat user `git pull` di VPS lama, untuk dapat fitur baru:
 - Worker: dedup queue → loop request `provision-user-cert.sh` → kalau sukses, file user.conf
   di-regenerate next time admin klik 🔧 Repair Container ATAU portal restart
 - Kalau gagal, username re-queued (retry tiap 5 menit sampai sukses)
+
+---
+
+## Update 25 Apr 2026 — Audit Fix Batch (Pre-Fresh-Install)
+
+Hasil audit komprehensif menemukan beberapa bug critical/high. Semua fix di session ini:
+
+### `server/services/userManager.js`
+- **Mutex `withUserLock`**: serialize semua operasi yg modify users.json
+  (provisionUser, removeUser, createDatabase, dropDatabase, repairUserCredentials,
+  recreateContainer). Mencegah race kalau 2 admin act bersamaan.
+- **`allocatePort()`**: dulu pakai `count(non-admin) + 8081` → tabrakan port kalau
+  user dihapus di tengah. Sekarang `max(used)+1` atau 8081.
+- **Atomic `saveUsers`**: tulis `.tmp` lalu rename, mencegah file corrupt.
+- **Module exports** wrap dengan `withUserLock` → semua route handler harus `await`.
+
+### `server/services/nginxManager.js`
+- **`ensureUserSubdomain()` deprecated logic dihapus**: dulu pakai `lastIndexOf('}')`
+  untuk inject server block ke nginx.conf — fragile, rusak kalau ada komentar di akhir.
+  Sekarang delegate ke `ensureUserConfig()` (per-user file di `nginx/users/`).
+- **Multi-port preview**: regex `server_name` sekarang capture `<project>(-<port>)?`
+  → `myapp-8000.user.netprem.org` route ke port 8000 (default 3000).
+  Range port: 3000–9999. Variable upstream + resolver Docker DNS.
+
+### `server/routes/admin.js` + `server/routes/api.js`
+- Semua handler yg panggil userManager mutex-wrapped → jadi `async` + `try/catch` +
+  `await`. Audit log + 500 response saat exception.
+
+### `scripts/cert-queue-worker.sh`
+- **Atomic processing pattern**: `mv queue → processing` lalu loop. File queue baru
+  langsung kosong & siap append baru selama worker jalan.
+- **Recovery**: kalau `processing` orphan dari crash sebelumnya → re-queue otomatis.
+- **Re-queue on fail**: cert gagal di-`echo >>` balik ke queue (single-line atomic <PIPE_BUF).
+
+### `docker-compose.yml`
+- **Fail-fast env vars**: `${VAR:?msg}` syntax untuk SESSION_SECRET, DOMAIN,
+  MYSQL_ROOT_PASSWORD, POSTGRES_PASSWORD. Compose error jelas kalau .env kelupaan.
+- `MYSQL_PASSWORD` default ke `MYSQL_ROOT_PASSWORD` kalau gak diset.
+
+### `scripts/migrate-to-opsi-c.sh`
+- Tambah `docker rm -f nginx-proxy 2>/dev/null` + `--remove-orphans` di compose up.
+  Mencegah container conflict pas migrate dari setup lama.
+
+### `scripts/uninstall-fresh.sh` (BARU)
+- One-shot uninstall: stop+remove semua container, volume, data, cron, log.
+- Default: pertahankan cert LE + .env + cloudflare token (hindari rate-limit).
+- Mode `--nuke`: hapus juga cert + token + .env (full nuclear).
+- Mode `--force`: skip prompt konfirmasi.
+- Documented di PERINTAH.md section 13F.
+
+### Dokumentasi
+- `PERINTAH.md` 13F: flow uninstall+install fresh.
+- `PERINTAH.md` 13G: tabel multi-port preview + use case PHP/Node/Python/Vite.

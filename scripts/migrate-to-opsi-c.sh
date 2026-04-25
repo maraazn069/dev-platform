@@ -209,10 +209,13 @@ fi
 sed -i "s|__DOMAIN__|$DOMAIN|g" nginx/nginx.conf
 echo "  ✓ nginx.conf regenerated"
 
-# Reload services biar mount baru aktif
+# Reload services biar mount baru aktif.
+# --remove-orphans: hapus container yg gak ada di compose (cleanup phantom)
+# --force-recreate: paksa recreate biar pickup mount baru
+docker rm -f nginx-proxy 2>/dev/null || true
 echo ""
 echo "  → Restart nginx untuk apply mount baru..."
-docker compose up -d nginx
+docker compose up -d --remove-orphans nginx
 sleep 3
 
 # ── 4) Per-user cert + nginx conf

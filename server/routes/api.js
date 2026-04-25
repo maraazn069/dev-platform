@@ -145,24 +145,32 @@ router.get('/databases', requireAuth, (req, res) => {
   res.json({ databases: dbs });
 });
 
-router.post('/databases', requireAuth, (req, res) => {
+router.post('/databases', requireAuth, async (req, res) => {
   const { type, name } = req.body;
   const username = req.session.user.username;
-  const result = userManager.createDatabase(username, type, name);
-  audit.log('db.create', { type, name, success: result.success }, req);
-  res.json(result);
+  try {
+    const result = await userManager.createDatabase(username, type, name);
+    audit.log('db.create', { type, name, success: result.success }, req);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'DB create gagal: ' + e.message });
+  }
 });
 
-router.delete('/databases/:type/:name', requireAuth, (req, res) => {
+router.delete('/databases/:type/:name', requireAuth, async (req, res) => {
   const { type, name } = req.params;
   const { confirm } = req.body || {};
   if (confirm !== name) {
     return res.json({ success: false, message: `Konfirmasi: kirim body { "confirm": "${name}" }.` });
   }
   const username = req.session.user.username;
-  const result = userManager.dropDatabase(username, type, name);
-  audit.log('db.drop', { type, name, success: result.success }, req);
-  res.json(result);
+  try {
+    const result = await userManager.dropDatabase(username, type, name);
+    audit.log('db.drop', { type, name, success: result.success }, req);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'DB drop gagal: ' + e.message });
+  }
 });
 
 // ===== Project management (per user) =====

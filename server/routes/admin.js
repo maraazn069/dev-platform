@@ -30,9 +30,8 @@ function getUsers() {
   return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
 }
 
-function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
+// saveUsers dipindah ke userManager.updateUsers() — semua mutasi users.json
+// HARUS lewat mutex withUserLock untuk hindari race condition.
 
 router.get('/', requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, '../../public/admin.html'));
@@ -55,7 +54,7 @@ router.get('/users', requireAdminApi, (req, res) => {
   res.json({ users });
 });
 
-router.post('/users/add', requireAdminApi, (req, res) => {
+router.post('/users/add', requireAdminApi, async (req, res) => {
   const { username, displayName, password, email } = req.body;
   if (!username || !password) {
     return res.json({ success: false, message: 'Username dan password wajib diisi.' });
@@ -63,52 +62,75 @@ router.post('/users/add', requireAdminApi, (req, res) => {
   const policy = validateStrong(password, username);
   if (!policy.ok) return res.json({ success: false, message: policy.message });
 
-  const result = userManager.provisionUser({ username, password, displayName, email });
-  audit.log('user.add', { target: username, success: result.success }, req);
-  res.json(result);
+  try {
+    const result = await userManager.provisionUser({ username, password, displayName, email });
+    audit.log('user.add', { target: username, success: result.success }, req);
+    res.json(result);
+  } catch (e) {
+    audit.log('user.add', { target: username, success: false, error: e.message }, req);
+    res.status(500).json({ success: false, message: 'Provision gagal: ' + e.message });
+  }
 });
 
-router.post('/users/remove', requireAdminApi, (req, res) => {
+router.post('/users/remove', requireAdminApi, async (req, res) => {
   const { username, confirm } = req.body;
   if (confirm !== username) {
     return res.json({ success: false, message: `Konfirmasi: ketik tepat "${username}".` });
   }
-  const result = userManager.removeUser(username);
-  audit.log('user.remove', { target: username, success: result.success, warnings: result.warnings }, req);
-  res.json(result);
+  try {
+    const result = await userManager.removeUser(username);
+    audit.log('user.remove', { target: username, success: result.success, warnings: result.warnings }, req);
+    res.json(result);
+  } catch (e) {
+    audit.log('user.remove', { target: username, success: false, error: e.message }, req);
+    res.status(500).json({ success: false, message: 'Remove gagal: ' + e.message });
+  }
 });
 
-router.post('/users/reset-password', requireAdminApi, (req, res) => {
+router.post('/users/reset-password', requireAdminApi, async (req, res) => {
   const { username, newPassword, forceChange } = req.body;
   const policy = validateStrong(newPassword, username);
   if (!policy.ok) return res.json({ success: false, message: policy.message });
 
-  const users = getUsers();
-  const idx = users.findIndex(u => u.username === username);
-  if (idx === -1) return res.json({ success: false, message: 'User tidak ditemukan.' });
-
-  users[idx].password = bcrypt.hashSync(newPassword, 12);
-  if (forceChange !== false) users[idx].mustChangePassword = true;
-  users[idx].passwordChangedAt = new Date().toISOString();
-  saveUsers(users);
-  audit.log('user.password_reset', { target: username, forceChange: forceChange !== false }, req);
-  res.json({ success: true, message: `Password '${username}' direset. User wajib ganti saat login.` });
+  try {
+    const result = await userManager.updateUsers((users) => {
+      const idx = users.findIndex(u => u.username === username);
+      if (idx === -1) return { ok: false, message: 'User tidak ditemukan.' };
+      users[idx].password = bcrypt.hashSync(newPassword, 12);
+      if (forceChange !== false) users[idx].mustChangePassword = true;
+      users[idx].passwordChangedAt = new Date().toISOString();
+      return { ok: true };
+    });
+    if (!result.ok) return res.json({ success: false, message: result.message });
+    audit.log('user.password_reset', { target: username, forceChange: forceChange !== false }, req);
+    res.json({ success: true, message: `Password '${username}' direset. User wajib ganti saat login.` });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Reset password gagal: ' + e.message });
+  }
 });
 
-router.post('/users/repair-db', requireAdminApi, (req, res) => {
+router.post('/users/repair-db', requireAdminApi, async (req, res) => {
   const { username } = req.body;
-  const result = userManager.repairUserCredentials(username);
-  audit.log('user.repair_db', { target: username, success: result.success }, req);
-  res.json(result);
+  try {
+    const result = await userManager.repairUserCredentials(username);
+    audit.log('user.repair_db', { target: username, success: result.success }, req);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Repair gagal: ' + e.message });
+  }
 });
 
 // Recreate (in-place upgrade) container code-server user — fix 502 cepat tanpa SSH
-router.post('/users/recreate-container', requireAdminApi, (req, res) => {
+router.post('/users/recreate-container', requireAdminApi, async (req, res) => {
   const { username } = req.body;
   if (!username) return res.json({ success: false, message: 'Username wajib.' });
-  const result = userManager.recreateContainer(username);
-  audit.log('user.recreate_container', { target: username, success: result.success }, req);
-  res.json(result);
+  try {
+    const result = await userManager.recreateContainer(username);
+    audit.log('user.recreate_container', { target: username, success: result.success }, req);
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Recreate gagal: ' + e.message });
+  }
 });
 
 router.get('/users/:username/credentials', requireAdminApi, (req, res) => {

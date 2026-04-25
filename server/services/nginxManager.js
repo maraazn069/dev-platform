@@ -27,53 +27,14 @@ function hasUserBlock(conf, username) {
 }
 
 function ensureUserSubdomain(username) {
+  // Opsi C: SELALU pakai per-user conf file (include /etc/nginx/users/*.conf di nginx.conf).
+  // BUG FIX: dulu pakai lastIndexOf('}') untuk inject ke nginx.conf — fragile & rusak kalau
+  // ada komentar di akhir file. Sekarang delegate ke ensureUserConfig.
   const conf = readConf();
-  if (!conf) {
-    return { success: false, message: 'nginx.conf tidak bisa dibaca dari portal (mount belum aktif?)' };
+  if (conf && !/include\s+\/etc\/nginx\/users/.test(conf)) {
+    console.warn(`[nginxManager] WARNING: nginx.conf belum punya 'include /etc/nginx/users/*.conf'. Jalankan scripts/migrate-to-opsi-c.sh dulu.`);
   }
-
-  if (hasWildcardUserBlock(conf)) {
-    // Mode HTTPS / Opsi C → user di-handle via wildcard / per-user conf file.
-    // Kalau Opsi C (per-user cert), juga generate user conf-nya.
-    if (/include\s+\/etc\/nginx\/users/.test(conf)) {
-      const r = ensureUserConfig(username);
-      return r;
-    }
-    return { success: true, message: 'wildcard nginx aktif, subdomain auto-handled' };
-  }
-
-  if (hasUserBlock(conf, username)) {
-    return { success: true, message: 'subdomain sudah ada di nginx.conf' };
-  }
-
-  const domain = process.env.DOMAIN || 'dev.example.com';
-  const block = `
-    server {
-        listen 80;
-        server_name ${username}.${domain};
-
-        location / {
-            proxy_pass http://codeserver-${username}:8443;
-            proxy_set_header Host $host;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection upgrade;
-            proxy_set_header Accept-Encoding gzip;
-            proxy_read_timeout 86400s;
-        }
-    }
-`;
-
-  const lastBrace = conf.lastIndexOf('}');
-  if (lastBrace === -1) return { success: false, message: 'nginx.conf format tidak dikenal' };
-
-  const newConf = conf.slice(0, lastBrace) + block + '\n' + conf.slice(lastBrace);
-  writeConf(newConf);
-
-  const reload = reloadNginx();
-  return {
-    success: true,
-    message: reload.success ? 'nginx subdomain ditambah & direload' : 'nginx subdomain ditambah, tapi reload gagal: ' + reload.error
-  };
+  return ensureUserConfig(username);
 }
 
 /**
@@ -123,12 +84,20 @@ function ensureUserConfig(username) {
   } catch {}
 
   const previewBlock = useUserCert ? `
-    # Preview port 3000 di container user — semua subdomain project route ke sini.
-    # User jalankan dev server di port 3000 (npm run dev / python -m http.server 3000 dst).
+    # Preview project — support multi-port via subdomain suffix.
+    #
+    # Format subdomain:
+    #   <project>.${username}.${domain}              → port 3000 (default)
+    #   <project>-<port>.${username}.${domain}       → port <port> (8000-9999)
+    #
+    # Contoh:
+    #   myapp.${username}.${domain}                  → port 3000 (npm run dev)
+    #   myapp-8000.${username}.${domain}             → port 8000 (python -m http.server 8000)
+    #   myapp-5173.${username}.${domain}             → port 5173 (vite dev)
     server {
         listen 443 ssl;
         http2 on;
-        server_name ~^(?<project>[a-z0-9][a-z0-9-]*)\\.${username}\\.${domain.replace(/\./g, '\\.')}$;
+        server_name ~^(?<project>[a-z0-9][a-z0-9]*)(?:-(?<port>[3-9][0-9]{3}))?\\.${username}\\.${domain.replace(/\./g, '\\.')}$;
 
         ssl_certificate ${perUserCert};
         ssl_certificate_key ${perUserCert.replace('fullchain', 'privkey')};
@@ -136,9 +105,12 @@ function ensureUserConfig(username) {
 
         client_max_body_size 50M;
 
+        # Default port = 3000; override via subdomain suffix -<port>
+        set $target_port "3000";
+        if ($port) { set $target_port $port; }
+
         location / {
-            set $upstream_preview "codeserver-${username}:3000";
-            proxy_pass http://$upstream_preview;
+            proxy_pass http://codeserver-${username}:$target_port;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -147,6 +119,9 @@ function ensureUserConfig(username) {
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_read_timeout 86400s;
+
+            # Resolver penting: dynamic upstream (variable) butuh resolver.
+            resolver 127.0.0.11 valid=10s ipv6=off;
         }
     }
 ` : `

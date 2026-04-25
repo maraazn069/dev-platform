@@ -18,6 +18,15 @@ const credentialSync = require('./credentialSync');
 const USERS_FILE = path.join(__dirname, '../data/users.json');
 const USER_DATA_BASE = '/opt/devplatform/data';
 
+// Simple promise-queue mutex untuk serialize semua operasi yg modify users.json.
+// Mencegah race condition kalau dua admin add/remove user bersamaan.
+let userOpLock = Promise.resolve();
+function withUserLock(fn) {
+  const next = userOpLock.then(() => fn()).catch(e => { throw e; });
+  userOpLock = next.catch(() => {});
+  return next;
+}
+
 function getUsers() {
   return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
 }
@@ -28,6 +37,18 @@ function saveUsers(users) {
   const tmp = USERS_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(users, null, 2));
   fs.renameSync(tmp, USERS_FILE);
+}
+
+/**
+ * Allokasi port baru: cari max(port) di antara non-admin user, +1.
+ * Kalau belum ada user, mulai dari 8081.
+ * BUG FIX: dulu pakai count, jadi tabrakan kalau ada user dihapus di tengah.
+ */
+function allocatePort(users) {
+  const usedPorts = users
+    .filter(u => u.role !== 'admin' && typeof u.port === 'number')
+    .map(u => u.port);
+  return usedPorts.length > 0 ? Math.max(...usedPorts) + 1 : 8081;
 }
 
 function isValidName(name) {
@@ -184,7 +205,7 @@ function provisionUser({ username, password, displayName, email }) {
 
   const mysqlPassword = randomPassword(16);
   const pgPassword = randomPassword(16);
-  const port = 8081 + users.filter(u => u.role !== 'admin').length;
+  const port = allocatePort(users);
   const errors = [];
 
   // 1) MySQL user + default db
@@ -546,15 +567,43 @@ function recreateContainer(username) {
   };
 }
 
+/**
+ * Helper untuk caller eksternal (auth.js, admin.js) yg perlu update users.json
+ * tapi gak dalam method userManager. Mutator dipanggil dengan array users yg fresh
+ * dari disk, return value gak dipakai (mutator harus mutate in-place atau replace).
+ *
+ * Mencegah race kalau caller ambil snapshot users.json lalu nulis kembali tanpa lock.
+ *
+ * Contoh:
+ *   await userManager.updateUsers((users) => {
+ *     const idx = users.findIndex(u => u.id === userId);
+ *     if (idx === -1) return { ok: false, message: 'not found' };
+ *     users[idx].password = newHash;
+ *     return { ok: true };
+ *   });
+ */
+function updateUsers(mutator) {
+  return withUserLock(async () => {
+    const users = getUsers();
+    const result = await mutator(users);
+    saveUsers(users);
+    return result;
+  });
+}
+
+// Wrap operasi yg modify users.json dengan mutex serialize. Mencegah race condition
+// kalau dua admin add/remove user bersamaan (tabrakan port allocation, korupsi file, dll).
 module.exports = {
-  provisionUser,
-  removeUser,
+  provisionUser: (args) => withUserLock(() => provisionUser(args)),
+  removeUser: (username) => withUserLock(() => removeUser(username)),
   listUserDatabases,
-  createDatabase,
-  dropDatabase,
-  repairUserCredentials,
-  recreateContainer,
+  createDatabase: (username, type, dbName) => withUserLock(() => createDatabase(username, type, dbName)),
+  dropDatabase: (username, type, dbName) => withUserLock(() => dropDatabase(username, type, dbName)),
+  repairUserCredentials: (username) => withUserLock(() => repairUserCredentials(username)),
+  recreateContainer: (username) => withUserLock(() => recreateContainer(username)),
   getCredentials,
   safeDbName,
-  isValidName
+  isValidName,
+  updateUsers,
+  withUserLock
 };

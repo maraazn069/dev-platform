@@ -5,15 +5,12 @@ const path = require('path');
 const router = express.Router();
 const { validateStrong } = require('../services/passwordPolicy');
 const audit = require('../services/auditLog');
+const userManager = require('../services/userManager');
 
 const USERS_FILE = path.join(__dirname, '../data/users.json');
 
 function getUsers() {
   return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-}
-
-function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 function isValidEmail(email) {
@@ -73,66 +70,69 @@ router.post('/logout', (req, res) => {
   });
 });
 
-router.post('/change-password', (req, res) => {
+router.post('/change-password', async (req, res) => {
   if (!req.session.user) return res.status(401).json({ success: false });
 
   const { oldPassword, newPassword } = req.body;
-  const users = getUsers();
-  const idx = users.findIndex(u => u.id === req.session.user.id);
 
-  if (idx === -1) return res.json({ success: false, message: 'User tidak ditemukan.' });
-  if (!bcrypt.compareSync(oldPassword || '', users[idx].password)) {
-    audit.log('password.change_failed_wrong_old', { username: users[idx].username }, req);
-    return res.json({ success: false, message: 'Password lama salah.' });
-  }
-
-  const policy = validateStrong(newPassword, users[idx].username);
-  if (!policy.ok) {
-    return res.json({ success: false, message: policy.message });
-  }
-
+  // Validate dulu (cheap check) sebelum acquire lock
   if (oldPassword === newPassword) {
     return res.json({ success: false, message: 'Password baru tidak boleh sama dengan password lama.' });
   }
 
-  users[idx].password = bcrypt.hashSync(newPassword, 12);
-  users[idx].mustChangePassword = false;
-  users[idx].passwordChangedAt = new Date().toISOString();
-  saveUsers(users);
+  try {
+    const result = await userManager.updateUsers((users) => {
+      const idx = users.findIndex(u => u.id === req.session.user.id);
+      if (idx === -1) return { ok: false, status: 404, message: 'User tidak ditemukan.' };
+      if (!bcrypt.compareSync(oldPassword || '', users[idx].password)) {
+        return { ok: false, message: 'Password lama salah.', auditEvent: 'password.change_failed_wrong_old', user: users[idx] };
+      }
+      const policy = validateStrong(newPassword, users[idx].username);
+      if (!policy.ok) return { ok: false, message: policy.message };
 
-  // Update session flag too
-  req.session.user.mustChangePassword = false;
-
-  audit.log('password.changed', { username: users[idx].username }, req);
-
-  // Sync ke File Browser & pgAdmin kalau yang ganti adalah admin (best-effort, async)
-  if (users[idx].role === 'admin') {
-    const { syncAdminPassword } = require('../services/credentialSync');
-    syncAdminPassword({
-      username: users[idx].username,
-      email: users[idx].email,
-      password: newPassword
-    }).then((result) => {
-      audit.log('password.sync_admin', {
-        username: users[idx].username,
-        filebrowser: result.filebrowser?.ok ? 'ok' : (result.filebrowser?.message || 'failed'),
-        pgadmin: result.pgadmin?.ok ? 'ok' : (result.pgadmin?.message || 'failed'),
-        env: result.env?.ok ? 'ok' : (result.env?.message || 'failed')
-      }, req);
-    }).catch((e) => {
-      audit.log('password.sync_admin_error', { error: e.message }, req);
+      users[idx].password = bcrypt.hashSync(newPassword, 12);
+      users[idx].mustChangePassword = false;
+      users[idx].passwordChangedAt = new Date().toISOString();
+      return { ok: true, user: users[idx] };
     });
-  }
 
-  res.json({
-    success: true,
-    message: users[idx].role === 'admin'
-      ? 'Password berhasil diubah. File Browser & pgAdmin sedang di-sync di latar belakang (cek audit log).'
-      : 'Password berhasil diubah.'
-  });
+    if (!result.ok) {
+      if (result.auditEvent) audit.log(result.auditEvent, { username: result.user?.username }, req);
+      if (result.status === 404) return res.status(404).json({ success: false, message: result.message });
+      return res.json({ success: false, message: result.message });
+    }
+
+    req.session.user.mustChangePassword = false;
+    audit.log('password.changed', { username: result.user.username }, req);
+
+    if (result.user.role === 'admin') {
+      const { syncAdminPassword } = require('../services/credentialSync');
+      syncAdminPassword({
+        username: result.user.username,
+        email: result.user.email,
+        password: newPassword
+      }).then((r) => {
+        audit.log('password.sync_admin', {
+          username: result.user.username,
+          filebrowser: r.filebrowser?.ok ? 'ok' : (r.filebrowser?.message || 'failed'),
+          pgadmin: r.pgadmin?.ok ? 'ok' : (r.pgadmin?.message || 'failed'),
+          env: r.env?.ok ? 'ok' : (r.env?.message || 'failed')
+        }, req);
+      }).catch((e) => audit.log('password.sync_admin_error', { error: e.message }, req));
+    }
+
+    res.json({
+      success: true,
+      message: result.user.role === 'admin'
+        ? 'Password berhasil diubah. File Browser & pgAdmin sedang di-sync di latar belakang (cek audit log).'
+        : 'Password berhasil diubah.'
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Gagal ubah password: ' + e.message });
+  }
 });
 
-router.post('/change-email', (req, res) => {
+router.post('/change-email', async (req, res) => {
   if (!req.session.user) return res.status(401).json({ success: false });
   if (req.session.user.mustChangePassword) {
     return res.status(423).json({ success: false, message: 'Ganti password dulu sebelum aksi lain.' });
@@ -143,18 +143,22 @@ router.post('/change-email', (req, res) => {
     return res.json({ success: false, message: 'Format email tidak valid.' });
   }
 
-  const users = getUsers();
-  const idx = users.findIndex(u => u.id === req.session.user.id);
-
-  if (idx === -1) return res.json({ success: false, message: 'User tidak ditemukan.' });
-  if (!bcrypt.compareSync(password || '', users[idx].password)) {
-    return res.json({ success: false, message: 'Password salah.' });
+  try {
+    const result = await userManager.updateUsers((users) => {
+      const idx = users.findIndex(u => u.id === req.session.user.id);
+      if (idx === -1) return { ok: false, message: 'User tidak ditemukan.' };
+      if (!bcrypt.compareSync(password || '', users[idx].password)) {
+        return { ok: false, message: 'Password salah.' };
+      }
+      users[idx].email = email || '';
+      return { ok: true, username: users[idx].username };
+    });
+    if (!result.ok) return res.json({ success: false, message: result.message });
+    audit.log('email.changed', { username: result.username, email }, req);
+    res.json({ success: true, message: 'Email berhasil diubah.' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Gagal ubah email: ' + e.message });
   }
-
-  users[idx].email = email || '';
-  saveUsers(users);
-  audit.log('email.changed', { username: users[idx].username, email }, req);
-  res.json({ success: true, message: 'Email berhasil diubah.' });
 });
 
 router.get('/me', (req, res) => {
