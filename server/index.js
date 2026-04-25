@@ -59,6 +59,10 @@ app.use('/dashboard', dashboardRoutes);
 app.use('/admin', adminRoutes);
 app.use('/api', apiRoutes);
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.get('/', (req, res) => {
   if (req.session && req.session.user) {
     if (req.session.user.role === 'admin') return res.redirect('/admin');

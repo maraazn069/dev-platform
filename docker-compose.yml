@@ -8,8 +8,6 @@
 #   3. Akses portal: https://dev.domainmu.com
 # ============================================================
 
-version: "3.9"
-
 services:
 
   # ---- Portal Login & Dashboard ----
@@ -23,12 +21,19 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET}
       - DOMAIN=${DOMAIN}
     volumes:
       - ./server/data:/app/server/data
     networks:
       - devplatform
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # ---- Nginx Reverse Proxy ----
   nginx:
@@ -44,7 +49,8 @@ services:
     networks:
       - devplatform
     depends_on:
-      - portal
+      portal:
+        condition: service_healthy
 
   # ---- PostgreSQL Shared (untuk semua user belajar) ----
   postgres:

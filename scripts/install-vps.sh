@@ -98,11 +98,13 @@ if ! docker compose version &> /dev/null 2>&1; then
 fi
 echo -e "${GREEN}✓ Docker Compose siap${NC}"
 
-# [5/8] Nginx & Certbot
-echo -e "${CYAN}[5/8]${NC} Install Nginx & Certbot..."
-apt install -y -qq nginx certbot python3-certbot-nginx
-systemctl enable nginx && systemctl start nginx
-echo -e "${GREEN}✓ Nginx & Certbot siap${NC}"
+# [5/8] Certbot (Nginx dihandle Docker, bukan sistem)
+echo -e "${CYAN}[5/8]${NC} Install Certbot..."
+apt install -y -qq certbot
+# Pastikan sistem nginx tidak jalan (konflik dengan Docker nginx di port 80)
+systemctl stop nginx 2>/dev/null || true
+systemctl disable nginx 2>/dev/null || true
+echo -e "${GREEN}✓ Certbot siap (sistem nginx dinonaktifkan)${NC}"
 
 # [6/8] Firewall
 echo -e "${CYAN}[6/8]${NC} Konfigurasi firewall..."
