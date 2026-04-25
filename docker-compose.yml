@@ -141,7 +141,8 @@ services:
       retries: 5
 
   # ---- File Browser (web UI untuk admin browse /opt/devplatform/data) ----
-  # Akses via https://files.DOMAIN, login pertama: admin/admin (wajib ganti).
+  # Akses via https://files.DOMAIN. Login: user "admin" + password = ADMIN_PASSWORD dari .env
+  # (di-sync otomatis oleh scripts/sync-admin-password.sh saat install).
   # Mount root /opt/devplatform/data → admin bisa upload/download/edit file
   # semua user (workspace, project, .trash) lewat browser.
   filebrowser:

@@ -122,11 +122,18 @@ sudo docker ps
 curl -I https://dev.netprem.org
 curl -I https://files.dev.netprem.org
 ```
-Setelah selesai, akses:
-- Portal admin: `https://dev.netprem.org/admin` (login admin/password yang di-set saat install)
-- File Browser: `https://files.dev.netprem.org` (login `admin/admin` → **WAJIB ganti**)
-- phpMyAdmin: `https://mysql.dev.netprem.org` (root + password dari `.env`)
-- pgAdmin: `https://pgadmin.dev.netprem.org` (lihat `cat .env | grep PGADMIN`)
+Setelah selesai, **semua login pakai 1 password admin** yang kakak ketik saat install:
+
+| Service | URL | Username/Email |
+|---|---|---|
+| Portal | `https://dev.netprem.org` | `admin` |
+| File Browser | `https://files.dev.netprem.org` | `admin` |
+| pgAdmin | `https://pgadmin.dev.netprem.org` | `admin@dev.netprem.org` (email, bukan "admin") |
+| phpMyAdmin | `https://mysql.dev.netprem.org` | `root` (paksaan dari MySQL) |
+| PostgreSQL remote | `20.200.209.228:5432` | `postgres` |
+| MySQL remote | `20.200.209.228:3306` | `root` |
+
+⚠️ **Tidak ada lagi `admin/admin` default** — installer langsung set password admin ke semua service di atas.
 
 ---
 
@@ -194,10 +201,28 @@ sudo docker ps
 curl -I https://dev.netprem.org
 curl -I https://files.dev.netprem.org
 ```
-Setelah reinstall:
-- Login admin baru: pakai password yang di-set saat `install-vps.sh`
-- File Browser di https://files.dev.netprem.org login default `admin/admin` → **WAJIB ganti**
-- Tambah user lewat Panel Admin (bukan SSH)
+Setelah reinstall semua login pakai 1 password yang kakak set saat installer (lihat tabel di Opsi 0).
+
+---
+
+### ⚡ Opsi WIPE — Hapus TOTAL & Install Ulang (1 blok perintah)
+**Untuk reset bersih dari nol — copy-paste 1x jadi tinggal jalan.**
+⚠️ SEMUA database, file user, sertifikat HTTPS, dan .env akan HILANG. Backup dulu kalau perlu.
+```bash
+ssh root@20.200.209.228
+cd ~/dev-platform && \
+  sudo bash scripts/backup.sh 2>/dev/null; \
+  sudo docker compose down -v --remove-orphans 2>/dev/null; \
+  sudo docker rm -f $(sudo docker ps -aq --filter "label=devplatform.user") 2>/dev/null; \
+  sudo docker rmi -f devplatform-codeserver:latest 2>/dev/null; \
+  sudo docker volume prune -f && sudo docker network prune -f; \
+  sudo rm -rf server/data/users.json server/data/audit.log server/data/projects.json /opt/devplatform/data/* /opt/devplatform/letsencrypt/*; \
+  sudo mv .env .env.backup-$(date +%Y%m%d-%H%M) 2>/dev/null; \
+  git pull origin main && \
+  sudo bash scripts/install-vps.sh && \
+  sudo bash scripts/setup-https.sh
+```
+Setelah selesai, login pakai 1 password admin (lihat tabel di Opsi 0).
 
 ---
 
@@ -744,6 +769,28 @@ dengan tombol **Buat / Rename / Hapus** dari dashboard.
   `sudo rm -rf /opt/devplatform/data/<username>/.trash/*`
 
 Folder fisik: `/opt/devplatform/data/<username>/<project>/`
+
+**Q: Kalau 1 user punya banyak project, VS Code-nya tetap 1 atau dipisah?**
+→ Tetap **1 container VS Code** per user (`codeserver-USERNAME`). Semua project ada di sidebar
+sebagai folder di `/config/projects/`. User pindah project = klik **File → Open Folder** di VS Code.
+Container terpisah per project = boros RAM (1 user = 1×2GB), gak masuk akal untuk 10 user.
+
+**Q: AI di VS Code selain GitHub Copilot?**
+Container code-server bisa pasang extension AI gratis/lebih murah. Cara install dari user (gak perlu admin):
+1. Buka VS Code user → tab **Extensions** (Ctrl+Shift+X)
+2. Cari & install salah satu:
+   - **Continue** (`continue.continue`) — open source, bisa pakai Claude/Gemini/OpenAI/Ollama lokal. Konfigurasi: Ctrl+Shift+P → "Continue: Configure"
+   - **Codeium** (`Codeium.codeium`) — gratis, mirip Copilot, login via browser
+   - **Cody** (`sourcegraph.cody-ai`) — Sourcegraph, gratis tier ada
+   - **Tabnine** (`TabNine.tabnine-vscode`) — gratis tier ada
+3. API key (Claude/OpenAI/Gemini) diisi di settings extension masing-masing.
+4. Untuk **Ollama** (model lokal di VPS), install dulu di host:
+   ```bash
+   curl -fsSL https://ollama.com/install.sh | sh
+   ollama pull qwen2.5-coder:7b
+   # extension Continue tinggal arahin ke http://host.docker.internal:11434
+   ```
+   ⚠️ Butuh RAM ekstra ~6-8GB untuk model 7B.
 
 ---
 
