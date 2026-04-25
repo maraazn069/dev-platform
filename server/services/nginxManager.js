@@ -54,7 +54,8 @@ function isSafeUsername(username) {
   return typeof username === 'string' && /^[a-z][a-z0-9_]{1,30}$/.test(username);
 }
 
-function ensureUserConfig(username) {
+function ensureUserConfig(username, opts = {}) {
+  const { skipReload = false } = opts;
   if (!isSafeUsername(username)) {
     return { success: false, message: `Username tidak valid: '${username}' (harus a-z, 0-9, _, max 31 char)` };
   }
@@ -182,6 +183,12 @@ ${previewBlock}
     return { success: false, message: 'Gagal tulis ' + filePath + ': ' + e.message };
   }
 
+  if (skipReload) {
+    return {
+      success: true,
+      message: `nginx user-conf ${username}.conf ditulis (preview ${useUserCert ? 'AKTIF' : 'pending cert'}). Reload: SKIPPED (caller will reload)`
+    };
+  }
   const reload = reloadNginx();
   return {
     success: true,

@@ -210,4 +210,68 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Dev Platform Portal running on port ${PORT} (${IS_HTTPS ? 'HTTPS' : 'HTTP'} mode, idle ${IDLE_TIMEOUT_MIN}min)`);
+
+  // SELF-HEAL nginx user conf: scan users.json saat portal start, regenerate semua
+  // user.conf di nginx/users/. Heal drift kalau:
+  //   - portal restart tapi user.conf hilang (volume baru)
+  //   - migration / upgrade gak auto-trigger Repair Container per user
+  //   - cert per-user baru di-issue → conf perlu regenerated dengan path cert baru
+  // Tulis semua file dulu (skipReload=true), lalu RELOAD SEKALI di akhir.
+  // Tunggu container nginx siap dulu — di cold start, portal bisa ready sebelum nginx up.
+  const runSelfHeal = async () => {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const usersFile = path.join(__dirname, 'data/users.json');
+      if (!fs.existsSync(usersFile)) return;
+
+      const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+      const targets = users.filter(u => u.role !== 'admin' && u.username);
+      if (targets.length === 0) {
+        console.log('[self-heal] no non-admin users, skip nginx user.conf regen');
+        return;
+      }
+
+      const nginxManager = require('./services/nginxManager');
+      const { reloadNginx } = require('./services/dockerExec');
+      const { execFileSync } = require('child_process');
+
+      // Wait for nginx-proxy container (max 30s, cek tiap 2s).
+      // Kalau ga ada (mode dev tanpa docker), skip reload tapi tetap tulis file.
+      let nginxReady = false;
+      for (let i = 0; i < 15; i++) {
+        try {
+          const out = execFileSync('docker', ['ps', '--format', '{{.Names}}', '--filter', 'name=^nginx-proxy$'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+          if (out.trim() === 'nginx-proxy') { nginxReady = true; break; }
+        } catch { /* docker not available — dev mode */ break; }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      let regenerated = 0;
+      let failed = 0;
+      for (const u of targets) {
+        try {
+          const r = nginxManager.ensureUserConfig(u.username, { skipReload: true });
+          if (r.success) regenerated++;
+          else { failed++; console.warn(`[self-heal] ${u.username}: ${r.message}`); }
+        } catch (e) {
+          failed++;
+          console.warn(`[self-heal] ${u.username} error: ${e.message}`);
+        }
+      }
+
+      console.log(`[self-heal] nginx user.conf regenerated: ${regenerated} ok, ${failed} failed (nginx ${nginxReady ? 'ready' : 'not detected'})`);
+
+      if (regenerated > 0 && nginxReady) {
+        const r = reloadNginx();
+        if (r && r.success === false) console.warn(`[self-heal] nginx reload failed: ${r.error}`);
+        else console.log('[self-heal] nginx reloaded ✓ (single reload)');
+      } else if (regenerated > 0) {
+        console.log('[self-heal] file written but nginx not ready — skip reload (will pick up on next start)');
+      }
+    } catch (e) {
+      console.warn(`[self-heal] error: ${e.message}`);
+    }
+  };
+  runSelfHeal();
 });

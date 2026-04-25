@@ -428,7 +428,33 @@ fi
 echo ""
 echo -e "${CYAN}Menjalankan semua service...${NC}"
 chmod +x scripts/*.sh
-docker compose up -d --build
+
+# CLEANUP ORPHAN CONTAINERS — hapus HANYA container yg kita kenali sebagai punya
+# install dev-platform sebelumnya / yg sering tabrakan dengan compose kita.
+# Volumes (mysql_data, postgres_data, /opt/devplatform/data) TIDAK ke-touch — aman.
+echo -e "${CYAN}  → cleanup orphan containers...${NC}"
+# Daftar EXACT nama container yang dimanage compose ini + tools yg sering nyangkut
+KNOWN_NAMES=(
+  portainer
+  watchtower
+  nginx-proxy
+  devplatform-portal
+  devplatform-mysql
+  devplatform-postgres
+)
+for NAME in "${KNOWN_NAMES[@]}"; do
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qFx "$NAME"; then
+    docker rm -f "$NAME" 2>&1 | sed 's/^/    /'
+  fi
+done
+# codeserver-<user> juga: tighter regex — username harus a-z[a-z0-9_]{1,30}
+# (sama dgn isSafeUsername di portal)
+for NAME in $(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^codeserver-[a-z][a-z0-9_]{1,30}$' || true); do
+  docker rm -f "$NAME" 2>&1 | sed 's/^/    /'
+done
+
+# --remove-orphans: kill container compose yg gak ada lagi di yml
+docker compose up -d --build --remove-orphans
 
 # Tunggu portal ready baru nginx bisa connect
 echo -e "${CYAN}Menunggu portal siap...${NC}"
