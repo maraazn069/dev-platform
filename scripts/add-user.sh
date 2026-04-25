@@ -53,6 +53,8 @@ echo -e "${BLUE}Menggunakan network: ${YELLOW}$DOCKER_NETWORK${NC}"
 
 USER_DIR="/opt/devplatform/data/$USERNAME"
 mkdir -p "$USER_DIR/projects/default"
+mkdir -p "$USER_DIR/projects/belajar-python"
+mkdir -p "$USER_DIR/projects/belajar-web"
 mkdir -p "$USER_DIR/config"
 
 # Buat container code-server untuk user ini

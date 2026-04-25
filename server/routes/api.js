@@ -123,9 +123,10 @@ router.get('/projects/:username', requireAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'User tidak ditemukan' });
 
   const domain = process.env.DOMAIN || 'dev.domainmu.com';
+  const protocol = process.env.PROTOCOL || 'http';
   const projects = (user.projects || ['default']).map(p => ({
     name: p,
-    url: `http://${username}.${domain}/?folder=/config/projects/${p}`,
+    url: `${protocol}://${username}.${domain}/?folder=/config/projects/${p}`,
     localPort: `http://localhost:${user.port}/?folder=/config/projects/${p}`
   }));
 

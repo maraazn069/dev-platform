@@ -24,6 +24,7 @@ services:
       - PORT=3000
       - SESSION_SECRET=${SESSION_SECRET}
       - DOMAIN=${DOMAIN}
+      - PROTOCOL=${PROTOCOL:-http}
     volumes:
       - ./server/data:/app/server/data
     networks:
