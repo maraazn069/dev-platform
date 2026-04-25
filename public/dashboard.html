@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Dev Platform</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; }
+    nav {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 10px; color: #f0f6fc; font-weight: 600; font-size: 1rem; }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .avatar {
+      width: 32px; height: 32px;
+      background: #1f6feb;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem; color: #fff;
+    }
+    .nav-username { font-size: 0.85rem; color: #8b949e; }
+    .btn-logout {
+      background: transparent; border: 1px solid #30363d;
+      color: #8b949e; padding: 6px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 0.8rem; transition: all 0.2s;
+    }
+    .btn-logout:hover { border-color: #f85149; color: #f85149; }
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+    .welcome { margin-bottom: 32px; }
+    .welcome h2 { font-size: 1.5rem; color: #f0f6fc; }
+    .welcome p { color: #8b949e; margin-top: 4px; font-size: 0.9rem; }
+    .section-title {
+      font-size: 0.85rem; color: #8b949e; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: #21262d; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 28px; }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .card:hover { border-color: #1f6feb44; }
+    .card h4 { color: #f0f6fc; font-size: 0.95rem; margin-bottom: 6px; }
+    .card p { color: #8b949e; font-size: 0.82rem; line-height: 1.5; }
+    .project-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 20px;
+      transition: all 0.2s;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+    }
+    .project-card:hover { border-color: #1f6feb; background: #1f2937; transform: translateY(-2px); }
+    .project-icon { font-size: 1.5rem; margin-bottom: 10px; }
+    .project-name { font-size: 1rem; color: #f0f6fc; font-weight: 600; margin-bottom: 4px; }
+    .project-meta { font-size: 0.8rem; color: #8b949e; }
+    .btn-primary {
+      background: #1f6feb; color: #fff;
+      border: none; border-radius: 7px;
+      padding: 8px 16px; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #388bfd; }
+    .btn-outline {
+      background: transparent; color: #58a6ff;
+      border: 1px solid #1f6feb; border-radius: 7px;
+      padding: 7px 14px; font-size: 0.85rem;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-outline:hover { background: #1f6feb22; }
+    .db-info { font-family: 'Consolas', monospace; font-size: 0.8rem; }
+    .db-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #21262d; }
+    .db-row:last-child { border-bottom: none; }
+    .db-key { color: #8b949e; }
+    .db-val { color: #79c0ff; }
+    .tag {
+      display: inline-block; font-size: 0.7rem;
+      padding: 2px 8px; border-radius: 20px;
+      border: 1px solid; margin-right: 4px;
+    }
+    .tag-pg { color: #3fb950; border-color: #238636; background: #23863611; }
+    .tag-mysql { color: #f0883e; border-color: #9e6a03; background: #9e6a0311; }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 28px;
+      width: 100%; max-width: 420px;
+    }
+    .modal h3 { color: #f0f6fc; margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.82rem; color: #8b949e; margin-bottom: 5px; }
+    .form-group input {
+      width: 100%; background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; padding: 9px 12px; color: #f0f6fc;
+      font-size: 0.9rem; outline: none;
+    }
+    .form-group input:focus { border-color: #1f6feb; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .btn-cancel {
+      background: transparent; color: #8b949e;
+      border: 1px solid #30363d; border-radius: 7px;
+      padding: 8px 16px; cursor: pointer;
+    }
+    .alert { padding: 10px 14px; border-radius: 7px; font-size: 0.85rem; margin-top: 12px; display: none; }
+    .alert.success { background: #0d2e17; border: 1px solid #238636; color: #3fb950; }
+    .alert.error { background: #3d1a1a; border: 1px solid #f85149; color: #f85149; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-brand">🖥️ Dev Platform</div>
+    <div class="nav-right">
+      <div class="avatar" id="avatarInitial">?</div>
+      <span class="nav-username" id="navUsername">Loading...</span>
+      <button class="btn-logout" onclick="logout()">Keluar</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="welcome">
+      <h2>Halo, <span id="displayName">...</span> 👋</h2>
+      <p>Pilih project yang ingin kamu buka, atau lihat info database di bawah.</p>
+    </div>
+
+    <div class="section-title">Project Kamu</div>
+    <div class="grid-3" id="projectGrid">
+      <div style="color:#8b949e; font-size:0.85rem;">Memuat project...</div>
+    </div>
+
+    <div class="section-title">Database Bersama</div>
+    <div class="grid-2" id="dbGrid">
+      <div style="color:#8b949e; font-size:0.85rem;">Memuat info database...</div>
+    </div>
+
+    <div class="section-title">Pengaturan Akun</div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <button class="btn-outline" onclick="openChangePassword()">🔑 Ganti Password</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="changePasswordModal">
+    <div class="modal">
+      <h3>🔑 Ganti Password</h3>
+      <div class="form-group">
+        <label>Password Lama</label>
+        <input type="password" id="oldPassword" placeholder="Password saat ini">
+      </div>
+      <div class="form-group">
+        <label>Password Baru (min. 8 karakter)</label>
+        <input type="password" id="newPassword" placeholder="Password baru">
+      </div>
+      <div class="alert" id="pwAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('changePasswordModal')">Batal</button>
+        <button class="btn-primary" onclick="changePassword()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let domain = window.location.hostname;
+
+    async function init() {
+      const res = await fetch('/dashboard/me');
+      if (!res.ok) return window.location.href = '/login';
+      const data = await res.json();
+      currentUser = data.user;
+      domain = window.location.hostname === 'localhost' ? 'dev.domainmu.com' : window.location.hostname;
+
+      document.getElementById('displayName').textContent = currentUser.displayName;
+      document.getElementById('navUsername').textContent = currentUser.username;
+      document.getElementById('avatarInitial').textContent = currentUser.displayName[0].toUpperCase();
+
+      loadProjects();
+      loadDbInfo();
+    }
+
+    async function loadProjects() {
+      const res = await fetch(`/api/projects/${currentUser.username}`);
+      const data = await res.json();
+      const grid = document.getElementById('projectGrid');
+      grid.innerHTML = '';
+
+      data.projects.forEach(p => {
+        const a = document.createElement('a');
+        a.href = p.url;
+        a.target = '_blank';
+        a.className = 'project-card';
+        a.innerHTML = `
+          <div class="project-icon">📁</div>
+          <div class="project-name">${p.name}</div>
+          <div class="project-meta">Klik untuk buka VS Code →</div>
+        `;
+        grid.appendChild(a);
+      });
+
+      if (!data.projects.length) {
+        grid.innerHTML = '<div style="color:#8b949e;font-size:0.85rem;">Belum ada project. Minta admin untuk menambahkan.</div>';
+      }
+    }
+
+    async function loadDbInfo() {
+      const res = await fetch('/api/db/info');
+      const db = await res.json();
+      const grid = document.getElementById('dbGrid');
+
+      grid.innerHTML = `
+        <div class="card">
+          <h4><span class="tag tag-pg">PostgreSQL</span></h4>
+          <div class="db-info" style="margin-top:12px;">
+            <div class="db-row"><span class="db-key">Host</span><span class="db-val">${db.postgresql.host}</span></div>
+            <div class="db-row"><span class="db-key">Port</span><span class="db-val">${db.postgresql.port}</span></div>
+            <div class="db-row"><span class="db-key">Database</span><span class="db-val">${db.postgresql.database}</span></div>
+            <div class="db-row"><span class="db-key">User</span><span class="db-val">${db.postgresql.user}</span></div>
+          </div>
+          <p style="margin-top:10px;">${db.postgresql.note}</p>
+        </div>
+        <div class="card">
+          <h4><span class="tag tag-mysql">MySQL</span></h4>
+          <div class="db-info" style="margin-top:12px;">
+            <div class="db-row"><span class="db-key">Host</span><span class="db-val">${db.mysql.host}</span></div>
+            <div class="db-row"><span class="db-key">Port</span><span class="db-val">${db.mysql.port}</span></div>
+            <div class="db-row"><span class="db-key">Database</span><span class="db-val">${db.mysql.database}</span></div>
+            <div class="db-row"><span class="db-key">User</span><span class="db-val">${db.mysql.user}</span></div>
+          </div>
+          <p style="margin-top:10px;">${db.mysql.note}</p>
+        </div>
+      `;
+    }
+
+    function openChangePassword() {
+      document.getElementById('changePasswordModal').classList.add('open');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    async function changePassword() {
+      const alert = document.getElementById('pwAlert');
+      const res = await fetch('/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          oldPassword: document.getElementById('oldPassword').value,
+          newPassword: document.getElementById('newPassword').value
+        })
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+    }
+
+    async function logout() {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    }
+
+    init();
+  </script>
+</body>
+</html>

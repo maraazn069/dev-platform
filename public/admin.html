@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Dev Platform</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; }
+    nav {
+      background: #161b22; border-bottom: 1px solid #30363d;
+      padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-brand { display: flex; align-items: center; gap: 10px; color: #f0f6fc; font-weight: 600; }
+    .nav-badge { font-size: 0.7rem; background: #da3633; color: #fff; padding: 2px 8px; border-radius: 20px; }
+    .btn-logout {
+      background: transparent; border: 1px solid #30363d;
+      color: #8b949e; padding: 6px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .btn-logout:hover { border-color: #f85149; color: #f85149; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+    .page-header h2 { font-size: 1.4rem; color: #f0f6fc; }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 32px; }
+    .stat-card {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 10px; padding: 18px;
+    }
+    .stat-card .label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; color: #f0f6fc; margin-top: 6px; }
+    .stat-card .sub { font-size: 0.75rem; color: #8b949e; margin-top: 2px; }
+    .section-title {
+      font-size: 0.85rem; color: #8b949e; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: #21262d; }
+    .table-wrapper { background: #161b22; border: 1px solid #30363d; border-radius: 10px; overflow: hidden; margin-bottom: 32px; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 12px 16px;
+      font-size: 0.78rem; color: #8b949e; text-transform: uppercase;
+      letter-spacing: 0.5px; border-bottom: 1px solid #21262d;
+      background: #0d1117;
+    }
+    td { padding: 14px 16px; border-bottom: 1px solid #21262d; font-size: 0.875rem; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1a2332; }
+    .status-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-right: 6px;
+    }
+    .status-dot.running { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+    .status-dot.stopped { background: #6e7681; }
+    .status-dot.notfound { background: #f0883e; }
+    .progress-bar { background: #21262d; border-radius: 4px; height: 6px; overflow: hidden; min-width: 80px; }
+    .progress-fill { height: 100%; background: #1f6feb; border-radius: 4px; transition: width 0.3s; }
+    .progress-fill.high { background: #f0883e; }
+    .progress-fill.critical { background: #f85149; }
+    .badge {
+      display: inline-block; font-size: 0.7rem;
+      padding: 2px 8px; border-radius: 20px; border: 1px solid;
+      margin-right: 3px;
+    }
+    .badge-project { color: #58a6ff; border-color: #1f6feb; background: #1f6feb11; }
+    .action-btn {
+      background: transparent; border: 1px solid #30363d;
+      color: #8b949e; padding: 4px 10px; border-radius: 5px;
+      cursor: pointer; font-size: 0.75rem; margin-right: 4px; transition: all 0.2s;
+    }
+    .action-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+    .action-btn.danger:hover { border-color: #f85149; color: #f85149; }
+    .btn-primary {
+      background: #1f6feb; color: #fff; border: none;
+      border-radius: 7px; padding: 9px 18px; font-size: 0.875rem;
+      font-weight: 600; cursor: pointer; transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #388bfd; }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #161b22; border: 1px solid #30363d;
+      border-radius: 12px; padding: 28px;
+      width: 100%; max-width: 460px;
+    }
+    .modal h3 { color: #f0f6fc; margin-bottom: 18px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.82rem; color: #8b949e; margin-bottom: 5px; }
+    .form-group input, .form-group select {
+      width: 100%; background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; padding: 9px 12px; color: #f0f6fc;
+      font-size: 0.9rem; outline: none;
+    }
+    .form-group input:focus { border-color: #1f6feb; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .btn-cancel {
+      background: transparent; color: #8b949e;
+      border: 1px solid #30363d; border-radius: 7px;
+      padding: 8px 16px; cursor: pointer;
+    }
+    .alert { padding: 10px 14px; border-radius: 7px; font-size: 0.85rem; margin-top: 12px; display: none; }
+    .alert.success { background: #0d2e17; border: 1px solid #238636; color: #3fb950; }
+    .alert.error { background: #3d1a1a; border: 1px solid #f85149; color: #f85149; }
+    .shell-cmd {
+      background: #0d1117; border: 1px solid #30363d;
+      border-radius: 6px; padding: 10px 12px;
+      font-family: monospace; font-size: 0.8rem;
+      color: #79c0ff; margin-top: 10px; word-break: break-all;
+    }
+    .refresh-btn {
+      background: transparent; border: 1px solid #30363d;
+      color: #8b949e; padding: 6px 14px; border-radius: 6px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .refresh-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+    .last-update { font-size: 0.75rem; color: #6e7681; margin-left: 8px; }
+    @media (max-width: 768px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-brand">
+      🖥️ Dev Platform
+      <span class="nav-badge">ADMIN</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:0.85rem;color:#8b949e;" id="adminName">Admin</span>
+      <button class="btn-logout" onclick="logout()">Keluar</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h2>Panel Admin</h2>
+      <button class="btn-primary" onclick="openAddUser()">+ Tambah User</button>
+    </div>
+
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="label">Total User</div><div class="value" id="totalUsers">–</div><div class="sub">Terdaftar</div></div>
+      <div class="stat-card"><div class="label">Aktif Sekarang</div><div class="value" id="activeUsers">–</div><div class="sub">Container running</div></div>
+      <div class="stat-card"><div class="label">RAM Dipakai</div><div class="value" id="totalRam">–</div><div class="sub">dari 56 GB</div></div>
+      <div class="stat-card"><div class="label">Total Project</div><div class="value" id="totalProjects">–</div><div class="sub">Semua user</div></div>
+    </div>
+
+    <div class="section-title">
+      Monitoring User & Resource
+      <button class="refresh-btn" onclick="loadUsers()">↻ Refresh</button>
+      <span class="last-update" id="lastUpdate"></span>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Status Container</th>
+            <th>CPU</th>
+            <th>RAM</th>
+            <th>Project</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr><td colspan="6" style="text-align:center;color:#6e7681;padding:24px;">Memuat data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Database Shared</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:32px;">
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
+        <div style="font-weight:600;color:#3fb950;margin-bottom:10px;">🐘 PostgreSQL</div>
+        <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
+          Host: <span style="color:#79c0ff;">localhost:5432</span><br>
+          Database: <span style="color:#79c0ff;">devplatform</span><br>
+          Admin: <span style="color:#79c0ff;">postgres</span><br>
+          Tiap user punya <strong style="color:#f0f6fc;">schema</strong> sendiri.<br>
+          Akses eksternal via <strong style="color:#f0f6fc;">Cloudflare Tunnel</strong>.
+        </div>
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
+        <div style="font-weight:600;color:#f0883e;margin-bottom:10px;">🐬 MySQL</div>
+        <div style="font-size:0.82rem;color:#8b949e;line-height:1.8;">
+          Host: <span style="color:#79c0ff;">localhost:3306</span><br>
+          Admin: <span style="color:#79c0ff;">root</span><br>
+          Tiap user punya <strong style="color:#f0f6fc;">database</strong> sendiri (db_namauser).<br>
+          Akses eksternal via <strong style="color:#f0f6fc;">Cloudflare Tunnel</strong>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Tambah User -->
+  <div class="modal-overlay" id="addUserModal">
+    <div class="modal">
+      <h3>➕ Tambah User Baru</h3>
+      <div class="form-group">
+        <label>Username <small style="color:#6e7681;">(huruf kecil & angka, 2-16 karakter)</small></label>
+        <input type="text" id="newUsername" placeholder="contoh: budi" pattern="[a-z][a-z0-9]{1,15}">
+      </div>
+      <div class="form-group">
+        <label>Nama Lengkap</label>
+        <input type="text" id="newDisplayName" placeholder="contoh: Budi Santoso">
+      </div>
+      <div class="form-group">
+        <label>Password Awal</label>
+        <input type="text" id="newPassword" placeholder="Min. 8 karakter">
+      </div>
+      <div class="alert" id="addUserAlert"></div>
+      <div class="shell-cmd" id="addUserCmd" style="display:none;"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('addUserModal')">Tutup</button>
+        <button class="btn-primary" onclick="addUser()">Tambah User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Reset Password -->
+  <div class="modal-overlay" id="resetPwModal">
+    <div class="modal">
+      <h3>🔑 Reset Password</h3>
+      <input type="hidden" id="resetUsername">
+      <div class="form-group">
+        <label>Password Baru untuk <strong id="resetForUser" style="color:#58a6ff;"></strong></label>
+        <input type="text" id="resetNewPw" placeholder="Password baru">
+      </div>
+      <div class="alert" id="resetPwAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('resetPwModal')">Batal</button>
+        <button class="btn-primary" onclick="resetPassword()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Tambah Project -->
+  <div class="modal-overlay" id="addProjectModal">
+    <div class="modal">
+      <h3>📁 Tambah Project</h3>
+      <input type="hidden" id="projectUsername">
+      <div class="form-group">
+        <label>Nama Project untuk <strong id="projectForUser" style="color:#58a6ff;"></strong></label>
+        <input type="text" id="projectName" placeholder="contoh: belajar-react">
+      </div>
+      <div class="alert" id="addProjectAlert"></div>
+      <div class="shell-cmd" id="addProjectCmd" style="display:none;"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('addProjectModal')">Tutup</button>
+        <button class="btn-primary" onclick="addProject()">Tambah</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allUsers = [];
+
+    async function init() {
+      const res = await fetch('/dashboard/me');
+      if (!res.ok) return window.location.href = '/login';
+      const data = await res.json();
+      document.getElementById('adminName').textContent = data.user.displayName;
+      loadUsers();
+      setInterval(loadUsers, 15000);
+    }
+
+    async function loadUsers() {
+      const res = await fetch('/api/users/status');
+      if (res.status === 401) return window.location.href = '/login';
+      const data = await res.json();
+      allUsers = data.users;
+
+      const active = allUsers.filter(u => u.container.status === 'running').length;
+      const totalRam = allUsers.reduce((sum, u) => {
+        const match = u.container.mem.match(/([\d.]+)MiB/);
+        return sum + (match ? parseFloat(match[1]) : 0);
+      }, 0);
+      const totalProj = allUsers.reduce((sum, u) => sum + (u.projects?.length || 0), 0);
+
+      document.getElementById('totalUsers').textContent = allUsers.length;
+      document.getElementById('activeUsers').textContent = active;
+      document.getElementById('totalRam').textContent = (totalRam / 1024).toFixed(1) + ' GB';
+      document.getElementById('totalProjects').textContent = totalProj;
+      document.getElementById('lastUpdate').textContent = 'Update: ' + new Date().toLocaleTimeString('id');
+
+      const tbody = document.getElementById('usersTableBody');
+      if (!allUsers.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6e7681;padding:24px;">Belum ada user. Klik "+ Tambah User" untuk memulai.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = allUsers.map(u => {
+        const isRunning = u.container.status === 'running';
+        const dotClass = u.container.status === 'running' ? 'running' : u.container.status === 'not_found' ? 'notfound' : 'stopped';
+        const statusLabel = u.container.status === 'running' ? 'Running' : u.container.status === 'not_found' ? 'Belum dibuat' : u.container.status;
+
+        const memPercNum = parseFloat(u.container.memPerc) || 0;
+        const progressClass = memPercNum > 70 ? 'critical' : memPercNum > 40 ? 'high' : '';
+
+        const projects = (u.projects || []).map(p => `<span class="badge badge-project">${p}</span>`).join('');
+
+        return `<tr>
+          <td>
+            <div style="font-weight:600;color:#f0f6fc;">${u.displayName}</div>
+            <div style="font-size:0.75rem;color:#6e7681;">@${u.username} · port ${u.port}</div>
+          </td>
+          <td><span class="status-dot ${dotClass}"></span>${statusLabel}</td>
+          <td>${isRunning ? u.container.cpu : '–'} ${u.container.mock && isRunning ? '<span style="font-size:0.7rem;color:#6e7681;">(demo)</span>' : ''}</td>
+          <td>
+            ${isRunning ? `
+              <div style="margin-bottom:4px;font-size:0.8rem;">${u.container.memPerc}</div>
+              <div class="progress-bar">
+                <div class="progress-fill ${progressClass}" style="width:${Math.min(memPercNum * 10, 100)}%"></div>
+              </div>
+            ` : '–'}
+          </td>
+          <td>${projects || '<span style="color:#6e7681;">–</span>'}</td>
+          <td>
+            <button class="action-btn" onclick="openAddProject('${u.username}')">+ Project</button>
+            <button class="action-btn" onclick="openResetPw('${u.username}')">🔑</button>
+            <button class="action-btn danger" onclick="removeUser('${u.username}')">Hapus</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openAddUser() { document.getElementById('addUserModal').classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    async function addUser() {
+      const alert = document.getElementById('addUserAlert');
+      const cmd = document.getElementById('addUserCmd');
+      const res = await fetch('/admin/users/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('newUsername').value,
+          displayName: document.getElementById('newDisplayName').value,
+          password: document.getElementById('newPassword').value
+        })
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) {
+        cmd.textContent = '# Jalankan di VPS:\n' + data.shellCommand;
+        cmd.style.display = 'block';
+        loadUsers();
+      }
+    }
+
+    async function removeUser(username) {
+      if (!confirm(`Hapus user "${username}" dari portal? (Container di VPS harus dihapus manual)`)) return;
+      const res = await fetch('/admin/users/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+      const data = await res.json();
+      if (data.success) { loadUsers(); alert(data.message + '\n\nJalankan di VPS:\n' + data.shellCommand); }
+      else alert('Error: ' + data.message);
+    }
+
+    function openResetPw(username) {
+      document.getElementById('resetUsername').value = username;
+      document.getElementById('resetForUser').textContent = username;
+      document.getElementById('resetPwModal').classList.add('open');
+    }
+
+    async function resetPassword() {
+      const alert = document.getElementById('resetPwAlert');
+      const res = await fetch('/admin/users/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('resetUsername').value,
+          newPassword: document.getElementById('resetNewPw').value
+        })
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+    }
+
+    function openAddProject(username) {
+      document.getElementById('projectUsername').value = username;
+      document.getElementById('projectForUser').textContent = username;
+      document.getElementById('addProjectModal').classList.add('open');
+    }
+
+    async function addProject() {
+      const alert = document.getElementById('addProjectAlert');
+      const cmd = document.getElementById('addProjectCmd');
+      const res = await fetch('/admin/users/add-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('projectUsername').value,
+          projectName: document.getElementById('projectName').value
+        })
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) {
+        cmd.textContent = '# Jalankan di VPS:\n' + data.shellCommand;
+        cmd.style.display = 'block';
+        loadUsers();
+      }
+    }
+
+    async function logout() {
+      await fetch('/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    }
+
+    init();
+  </script>
+</body>
+</html>

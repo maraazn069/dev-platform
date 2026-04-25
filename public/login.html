@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Dev Platform</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0;
+      background-image: linear-gradient(rgba(31,111,235,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(31,111,235,0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+    .card {
+      position: relative; z-index: 1;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+    .logo { text-align: center; margin-bottom: 32px; }
+    .logo .icon { font-size: 2.5rem; }
+    .logo h1 { font-size: 1.4rem; color: #f0f6fc; margin-top: 8px; }
+    .logo p { font-size: 0.85rem; color: #8b949e; margin-top: 4px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-size: 0.85rem; color: #8b949e; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: #f0f6fc;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #1f6feb; }
+    .btn {
+      width: 100%;
+      background: #1f6feb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 13px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 8px;
+    }
+    .btn:hover { background: #388bfd; }
+    .btn:disabled { background: #30363d; cursor: not-allowed; }
+    .error {
+      background: #3d1a1a;
+      border: 1px solid #f85149;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.85rem;
+      color: #f85149;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .footer-note {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #6e7681;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="card">
+    <div class="logo">
+      <div class="icon">🖥️</div>
+      <h1>Dev Platform</h1>
+      <p>Platform Coding Mandiri — Untuk Belajar</p>
+    </div>
+
+    <div class="error" id="errorMsg"></div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="Masukkan username" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Masukkan password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn" id="loginBtn">Masuk</button>
+    </form>
+
+    <div class="footer-note">
+      Lupa password? Hubungi admin platform.
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const errorMsg = document.getElementById('errorMsg');
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+      errorMsg.style.display = 'none';
+
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        window.location.href = data.redirect;
+      } else {
+        errorMsg.textContent = data.message;
+        errorMsg.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Masuk';
+      }
+    });
+  </script>
+</body>
+</html>

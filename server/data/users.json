@@ -1,0 +1,14 @@
+[
+  {
+    "id": "admin-001",
+    "username": "admin",
+    "password": "$2b$10$l7PxTDw1mkynLvuBGvRgRuB.Bxfjq1qfQ7FYXuDLq9EhmZXOuEOKu",
+    "role": "admin",
+    "displayName": "Administrator",
+    "port": 8081,
+    "projects": [
+      "project-contoh"
+    ],
+    "createdAt": "2026-04-25T02:11:05.276Z"
+  }
+]
