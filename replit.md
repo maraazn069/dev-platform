@@ -1,91 +1,97 @@
 # Self-Hosted Dev Platform
 
-## Deskripsi
+Platform coding mandiri berbasis Docker untuk 1-10 user belajar, mirip Replit/VSCode.dev.
 
-Platform coding mandiri di VPS sendiri untuk 1-10 user, tujuan belajar. Mirip Replit tapi self-hosted dan gratis.
+## Stack
+- **Portal**: Node.js 20 + Express (login, dashboard, admin panel)
+- **VS Code**: code-server (linuxserver/code-server) per user via Docker
+- **Database**: PostgreSQL 15 + MySQL 8 (shared, tiap user punya schema/db sendiri)
+- **Reverse Proxy**: Nginx (Docker container, bukan sistem)
+- **SSL**: Let's Encrypt wildcard via Cloudflare DNS challenge
+- **Monitoring**: Portainer, Adminer
 
-## Fitur
-
-- Portal login terpusat (halaman login + dashboard user + panel admin)
-- VS Code di browser (code-server) per user via subdomain
-- Multi-project per user (bisa punya banyak project folder)
-- Monitoring resource real-time (CPU, RAM per container user)
-- Shared PostgreSQL (tiap user punya schema sendiri)
-- Shared MySQL (tiap user punya database sendiri)
-- Adminer: Web UI untuk akses database di browser
-- Cloudflare Tunnel: akses database dari luar (via tools seperti DBeaver, TablePlus)
-- Auto-update containers (Watchtower)
-- Docker management UI (Portainer)
-- HTTPS gratis via Let's Encrypt
-
-## Arsitektur
+## Struktur File Penting
 
 ```
-Client Browser
-     │
-     ▼
-Nginx (HTTPS reverse proxy)
-     │
-     ├── dev.domainmu.com      → Portal (Node.js Express, port 3000)
-     ├── namauser.domainmu.com → code-server user (port 808x)
-     └── db-admin.domainmu.com → Adminer (port 8888)
-     
-Internal Services:
-- PostgreSQL (port 5432, localhost only)
-- MySQL (port 3306, localhost only)
-- Portainer (port 9000, localhost only)
-
-External access ke DB:
-- Cloudflare Tunnel → db.domainmu.com → PostgreSQL/MySQL
-```
-
-## Halaman Portal
-
-- `/login` — Halaman login (semua user)
-- `/dashboard` — Dashboard user (list project, info DB, ganti password)
-- `/admin` — Panel admin (monitoring resource, kelola user & project)
-
-## Struktur File
-
-```
+├── docker-compose.yml          # Semua service (portal, nginx, postgres, mysql, adminer, portainer)
+├── Dockerfile.portal           # Build image portal Node.js (port 3000)
+├── nginx/nginx.conf            # Template - di-overwrite oleh install-vps.sh
 ├── server/
-│   ├── index.js              # Express app utama
-│   ├── data/users.json       # Database user portal (auto-generated)
+│   ├── index.js               # Express app (PORT=3000, /health endpoint)
 │   └── routes/
-│       ├── auth.js           # Login, logout, ganti password
-│       ├── dashboard.js      # Dashboard user
-│       ├── admin.js          # CRUD user, project management
-│       └── api.js            # Docker stats, DB info, projects API
+│       ├── api.js             # Projects API (pakai PROTOCOL env untuk URL)
+│       ├── auth.js            # Login/logout
+│       ├── dashboard.js       # Dashboard user
+│       └── admin.js           # Admin panel
 ├── public/
-│   ├── login.html            # Halaman login
-│   ├── dashboard.html        # Dashboard user
-│   └── admin.html            # Panel admin dengan monitoring
-├── docker-compose.yml        # Portal + Nginx + PostgreSQL + MySQL + Adminer + Portainer
-├── Dockerfile.portal         # Image Docker untuk portal
-├── nginx/nginx.conf          # Reverse proxy config
-├── .env.example              # Template environment
+│   ├── login.html
+│   ├── dashboard.html
+│   └── admin.html
 └── scripts/
-    ├── setup.sh              # Setup VPS baru (Docker, Nginx, firewall)
-    ├── add-user.sh           # Tambah user (container + PG schema + MySQL DB)
-    ├── remove-user.sh        # Hapus user
-    ├── list-users.sh         # List user aktif
-    ├── create-project.sh     # Buat folder project baru
-    ├── init-postgres.sql     # Init script PostgreSQL
-    └── init-mysql.sql        # Init script MySQL
+    ├── install-vps.sh          # Installer otomatis (generate nginx.conf + .env)
+    ├── setup-https.sh          # Setup wildcard SSL via Cloudflare
+    ├── add-user.sh             # Tambah user + buat container code-server
+    ├── remove-user.sh          # Hapus user
+    ├── list-users.sh           # List semua user
+    └── create-project.sh       # Buat project folder
 ```
 
-## Akun Default Admin
+## Variabel Environment (.env)
 
-- Username: `admin`
-- Password: `admin123` (WAJIB diganti setelah deploy)
+| Variabel | Keterangan |
+|----------|-----------|
+| `DOMAIN` | Domain utama (contoh: dev.netprem.org) |
+| `LETSENCRYPT_EMAIL` | Email untuk SSL cert |
+| `PROTOCOL` | `http` atau `https` (otomatis diubah oleh setup-https.sh) |
+| `SESSION_SECRET` | Secret key session Express |
+| `POSTGRES_PASSWORD` | Password PostgreSQL |
+| `MYSQL_ROOT_PASSWORD` | Password root MySQL |
+| `MYSQL_PASSWORD` | Password user admin MySQL |
+| `TZ` | Timezone (default: Asia/Jakarta) |
 
-## Dependencies
+## Default Login
+- Admin: `admin` / `admin123`
+- User 1: `user1` / `user1234`
 
-- Node.js 20
-- express, express-session, bcryptjs, uuid
+## Cara Deploy ke VPS Baru
 
-## User Preferences
+### 1. Push ke GitHub (dari Replit terminal)
+```bash
+git add -A
+git commit -m "update: ready for deploy"
+git remote set-url origin https://TOKEN@github.com/maraazn069/dev-platform.git
+git push origin main
+```
 
-- Bahasa komunikasi: Indonesia
-- Tujuan: Belajar, bukan komersial
-- Target: 1-10 user, VPS 4 vCPU / 56 GB RAM
+### 2. Install di VPS (Ubuntu 24.04)
+```bash
+# Hapus semua kalau reinstall
+docker compose down -v 2>/dev/null || true
+cd ~ && rm -rf dev-platform
+
+# Clone dan install
+git clone https://github.com/maraazn069/dev-platform
+cd dev-platform
+sudo bash scripts/install-vps.sh
+```
+
+### 3. Setup HTTPS (setelah portal jalan)
+```bash
+cd ~/dev-platform
+sudo bash scripts/setup-https.sh
+# Butuh Cloudflare API Token (Zone → DNS → Edit)
+```
+
+### 4. Tambah User
+```bash
+cd ~/dev-platform
+sudo bash scripts/add-user.sh namauser password123
+```
+
+## Catatan Teknis
+- Nginx dihandle Docker (bukan sistem nginx) — sistem nginx harus disabled
+- Docker network: `dev-platform_devplatform` (auto-detect di add-user.sh)
+- Portal healthcheck: `GET /health` → `{"status":"ok"}`
+- Nginx tunggu portal healthy sebelum start (`depends_on: service_healthy`)
+- Wildcard SSL cert cover semua subdomain `*.DOMAIN` sekaligus
+- Setelah HTTPS aktif, portal rebuild otomatis dengan `PROTOCOL=https`
