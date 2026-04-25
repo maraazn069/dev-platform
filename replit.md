@@ -309,6 +309,12 @@ otomatis, dan hardening VPS.
 - `CODE_SERVER_MEM=2g`, `CODE_SERVER_CPUS=1.5`, `CODE_SERVER_PIDS=300`
 - `BACKUP_ROOT=/opt/devplatform/backups`
 
+### Supported OS
+- Ubuntu 22.04 LTS (Jammy) & Ubuntu 24.04 LTS (Noble) — keduanya tested
+- Docker dipasang dari repo resmi docker.com via install-vps.sh (sama di keduanya)
+- Cgroups v2 (default di 21.10+) → resource limits container jalan native
+- Tidak ada hard-coded version check di script manapun
+
 ### File Browser (Admin Only)
 - Service `filebrowser` (image `filebrowser/filebrowser:s6`) di docker-compose.yml
 - Mount `/opt/devplatform/data:/srv` → admin bisa akses semua workspace user

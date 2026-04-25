@@ -82,8 +82,10 @@ git stash pop   # restore perubahan lokal kalau perlu
 
 ## 3️⃣ Install / Reinstall / Update Server di VPS
 
-### 🆕 Opsi 0 — VPS BARU dari Nol (Fresh Ubuntu 24.04)
+### 🆕 Opsi 0 — VPS BARU dari Nol (Fresh Ubuntu 22.04 / 24.04)
 Pakai ini kalau VPS Azure baru dibuat (belum pernah ada Docker / dev-platform).
+**Support: Ubuntu 22.04 LTS (Jammy) & 24.04 LTS (Noble)** — script otomatis install
+Docker via repo resmi, jadi versi Ubuntu mana saja yang masih supported jalan.
 ```bash
 # 1. SSH login ke VPS
 ssh root@20.200.209.228

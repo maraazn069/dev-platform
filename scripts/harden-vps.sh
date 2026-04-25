@@ -1,6 +1,6 @@
 #!/bin/bash
 # ================================================================
-# harden-vps.sh — Hardening one-shot untuk VPS Ubuntu 24.04
+# harden-vps.sh — Hardening one-shot untuk VPS Ubuntu 22.04 / 24.04
 #
 # Pakai: sudo bash scripts/harden-vps.sh
 #
