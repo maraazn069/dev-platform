@@ -2,7 +2,7 @@
 # ================================================================
 # setup-https.sh — Setup HTTPS dengan Let's Encrypt (Wildcard)
 #
-# Wildcard cert (*.dev.netprem.org) via Cloudflare DNS Challenge
+# Wildcard cert (*.DOMAIN) via Cloudflare DNS Challenge
 # sehingga semua subdomain user langsung dapat HTTPS.
 #
 # Cara pakai:
