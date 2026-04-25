@@ -162,11 +162,80 @@ DATA_DIR=/opt/devplatform/data
 EOF
 echo -e "${GREEN}✓ File .env dibuat${NC}"
 
+# Generate nginx.conf dengan domain yang benar
+echo -e "${CYAN}Membuat konfigurasi Nginx...${NC}"
+cat > nginx/nginx.conf << NGINXEOF
+events {
+    worker_connections 1024;
+}
+
+http {
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    # ---- Portal utama ----
+    server {
+        listen 80;
+        server_name $DOMAIN;
+
+        client_max_body_size 50M;
+
+        location / {
+            proxy_pass http://devplatform-portal:3000;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_read_timeout 60s;
+            proxy_connect_timeout 10s;
+        }
+    }
+
+    # ---- Adminer: db-admin.$DOMAIN ----
+    server {
+        listen 80;
+        server_name db-admin.$DOMAIN;
+
+        location / {
+            proxy_pass http://devplatform-adminer:8080;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+        }
+    }
+
+    # ---- Catch-all ----
+    server {
+        listen 80 default_server;
+        server_name _;
+        return 301 http://$DOMAIN\$request_uri;
+    }
+}
+NGINXEOF
+echo -e "${GREEN}✓ nginx.conf dibuat untuk domain: $DOMAIN${NC}"
+
 # Build & start semua service
 echo ""
 echo -e "${CYAN}Menjalankan semua service...${NC}"
 chmod +x scripts/*.sh
 docker compose up -d --build
+
+# Tunggu portal ready baru nginx bisa connect
+echo -e "${CYAN}Menunggu portal siap...${NC}"
+sleep 20
+
+# Pastikan nginx terhubung ke network yang benar
+NETWORK_NAME=$(docker network ls --filter name=devplatform --format "{{.Name}}" | head -1)
+if [ -n "$NETWORK_NAME" ]; then
+  docker network connect "$NETWORK_NAME" nginx-proxy 2>/dev/null || true
+fi
+
+# Restart nginx supaya load config terbaru
+docker compose restart nginx
+sleep 3
+
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP-VPS-mu")
 
 echo ""
 echo -e "${GREEN}${BOLD}"
@@ -175,8 +244,8 @@ echo "  ✓ Instalasi berhasil!"
 echo "  ================================================"
 echo -e "${NC}"
 echo -e "${BOLD}Akses Platform:${NC}"
-echo -e "  Portal     : ${CYAN}http://$(curl -s ifconfig.me)${NC} (sementara, belum HTTPS)"
-echo -e "  Domain nanti: ${CYAN}https://$DOMAIN${NC}"
+echo -e "  Via domain  : ${CYAN}http://$DOMAIN${NC}"
+echo -e "  Via IP      : ${CYAN}http://$SERVER_IP${NC} (redirect ke domain)"
 echo ""
 echo -e "${BOLD}Login Default:${NC}"
 echo -e "  Admin  : username ${YELLOW}admin${NC}  / password ${YELLOW}admin123${NC}"
@@ -186,9 +255,9 @@ echo -e "${BOLD}Kredensial Database (simpan baik-baik!):${NC}"
 echo -e "  PostgreSQL password : ${YELLOW}$PG_PASS${NC}"
 echo -e "  MySQL root password : ${YELLOW}$MYSQL_ROOT_PASS${NC}"
 echo ""
-echo -e "${YELLOW}Langkah selanjutnya:${NC}"
-echo -e "  1. Arahkan DNS ${BOLD}$DOMAIN${NC} → IP VPS ini"
-echo -e "  2. sudo certbot --nginx -d $DOMAIN"
+echo -e "${YELLOW}Langkah selanjutnya (HTTPS):${NC}"
+echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"
+echo -e "  2. Jalankan: sudo bash scripts/setup-https.sh"
 echo -e "  3. Tambah user: sudo bash scripts/add-user.sh namauser password port"
 echo -e "  4. ${RED}WAJIB: Ganti password admin dan user1 setelah login pertama!${NC}"
 echo ""
