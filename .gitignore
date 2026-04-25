@@ -31,3 +31,4 @@ npm-debug.log*
 # Build output
 dist/
 build/
+attached_assets/

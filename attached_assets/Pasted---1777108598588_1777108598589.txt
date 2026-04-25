@@ -178,7 +178,7 @@ No VM guests are running outdated hypervisor (qemu) binaries on this host.
 Buka Cloudflare Dashboard → My Profile → API Tokens
 Buat token dengan permission: Zone → DNS → Edit
 
-Masukkan Cloudflare API Token: cfut_OKaVbWe96T4bIfY6HZbRCzPpayWUYAi9FA2VT9Yo11037cd6
+Masukkan Cloudflare API Token: [REDACTED]
 ✓ Cloudflare credentials disimpan
 Stop nginx sementara...
 Minta sertifikat SSL wildcard...
