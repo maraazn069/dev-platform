@@ -68,6 +68,17 @@ if [ -z "$PGADMIN_EMAIL" ]; then PGADMIN_EMAIL="admin@local.dev"; fi
 read -p "$(echo -e ${YELLOW})Password pgAdmin (Enter untuk auto-generate): $(echo -e ${NC})" PGADMIN_PASSWORD
 if [ -z "$PGADMIN_PASSWORD" ]; then PGADMIN_PASSWORD=$(openssl rand -base64 16); fi
 
+echo ""
+echo -e "${BOLD}Akses Remote Database${NC}"
+echo -e "${YELLOW}Daftarkan IP publik laptop kamu untuk konek MySQL/PostgreSQL via DBeaver/Workbench."
+echo -e "Cek IP publik kamu: ${BOLD}curl ifconfig.me${NC} (jalankan di laptop kamu, bukan VPS!)"
+echo -e "Format: pisah koma, contoh: 203.0.113.5,198.51.100.10"
+echo -e "${RED}Kosongkan untuk SKIP firewall whitelist (port 3306/5432 hanya bisa dari localhost VPS).${NC}"
+read -p "$(echo -e ${YELLOW})IP yang boleh konek DB (Enter untuk skip): $(echo -e ${NC})" DB_REMOTE_IPS
+
+read -p "$(echo -e ${YELLOW})Idle timeout login portal dalam menit (Enter untuk 60): $(echo -e ${NC})" IDLE_TIMEOUT_INPUT
+IDLE_TIMEOUT_MIN="${IDLE_TIMEOUT_INPUT:-60}"
+
 MYSQL_PASS=$(openssl rand -base64 16)
 SESSION_SECRET=$(openssl rand -base64 32)
 
@@ -84,8 +95,35 @@ echo -e "${GREEN}✓ Sistem diperbarui${NC}"
 
 # [2/8] Install dependensi
 echo -e "${CYAN}[2/8]${NC} Install dependensi dasar..."
-apt install -y -qq curl wget git nano ufw fail2ban htop unzip openssl
+DEBIAN_FRONTEND=noninteractive apt install -y -qq curl wget git nano ufw fail2ban htop unzip openssl unattended-upgrades apt-listchanges
 echo -e "${GREEN}✓ Dependensi terinstall${NC}"
+
+# Aktifkan fail2ban (jail SSH default ada)
+cat > /etc/fail2ban/jail.d/devplatform.conf <<'F2BEOF'
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+backend = systemd
+
+[sshd]
+enabled = true
+maxretry = 4
+bantime = 6h
+F2BEOF
+systemctl enable fail2ban >/dev/null 2>&1
+systemctl restart fail2ban >/dev/null 2>&1
+echo -e "${GREEN}✓ fail2ban aktif (jail sshd)${NC}"
+
+# Aktifkan unattended-upgrades (auto security patch)
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'AUEOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+AUEOF
+systemctl enable unattended-upgrades >/dev/null 2>&1
+systemctl restart unattended-upgrades >/dev/null 2>&1
+echo -e "${GREEN}✓ Auto-update security patch aktif${NC}"
 
 # [3/8] Install Docker
 echo -e "${CYAN}[3/8]${NC} Install Docker..."
@@ -96,6 +134,20 @@ if ! command -v docker &> /dev/null; then
 else
   echo -e "${GREEN}✓ Docker sudah ada${NC}"
 fi
+
+# Konfigurasi Docker daemon (log rotation default + live restore)
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'DOCKEREOF'
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "10m", "max-file": "3" },
+  "live-restore": true,
+  "no-new-privileges": true,
+  "userland-proxy": false
+}
+DOCKEREOF
+systemctl restart docker
+echo -e "${GREEN}✓ Docker daemon dikonfigurasi (log rotation + live restore)${NC}"
 
 # [4/8] Docker Compose
 echo -e "${CYAN}[4/8]${NC} Install Docker Compose..."
@@ -120,10 +172,23 @@ ufw default allow outgoing > /dev/null
 ufw allow 22/tcp > /dev/null
 ufw allow 80/tcp > /dev/null
 ufw allow 443/tcp > /dev/null
-ufw allow 3306/tcp > /dev/null   # MySQL untuk akses remote (DBeaver/Workbench)
-ufw allow 5432/tcp > /dev/null   # PostgreSQL untuk akses remote (psql/pgAdmin desktop)
+
+if [ -n "$DB_REMOTE_IPS" ]; then
+  # Whitelist HANYA IP yang user daftarkan untuk port DB
+  IFS=', ' read -ra IP_ARR <<< "$DB_REMOTE_IPS"
+  for IP in "${IP_ARR[@]}"; do
+    [ -z "$IP" ] && continue
+    ufw allow from "$IP" to any port 3306 proto tcp > /dev/null
+    ufw allow from "$IP" to any port 5432 proto tcp > /dev/null
+    echo -e "${GREEN}✓ Whitelist DB akses: $IP${NC}"
+  done
+  echo -e "${GREEN}✓ Firewall aktif (22, 80, 443) + DB hanya untuk IP whitelist${NC}"
+else
+  echo -e "${YELLOW}⚠ Tidak ada IP whitelist DB. Port 3306/5432 TIDAK terbuka dari internet.${NC}"
+  echo -e "${YELLOW}  Untuk akses DB dari laptop, edit nanti: sudo ufw allow from <IP> to any port 3306 proto tcp${NC}"
+  echo -e "${GREEN}✓ Firewall aktif (22, 80, 443)${NC}"
+fi
 ufw --force enable > /dev/null
-echo -e "${GREEN}✓ Firewall aktif (22, 80, 443, 3306, 5432)${NC}"
 
 # [7/8] Clone atau setup repo
 echo -e "${CYAN}[7/8]${NC} Setup direktori project..."
@@ -156,6 +221,17 @@ SESSION_SECRET=$SESSION_SECRET
 TZ=$TZ
 PROTOCOL=http
 
+# Idle timeout login portal (menit)
+IDLE_TIMEOUT_MIN=$IDLE_TIMEOUT_MIN
+
+# Whitelist IP yang boleh akses DB remote (kosong = hanya localhost)
+DB_REMOTE_IPS=$DB_REMOTE_IPS
+
+# Resource limits per code-server container
+CODE_SERVER_MEM=2g
+CODE_SERVER_CPUS=1.5
+CODE_SERVER_PIDS=300
+
 # Database PostgreSQL
 POSTGRES_PASSWORD=$PG_PASS
 
@@ -167,9 +243,11 @@ MYSQL_PASSWORD=$MYSQL_PASS
 PGADMIN_EMAIL=$PGADMIN_EMAIL
 PGADMIN_PASSWORD=$PGADMIN_PASSWORD
 
-# Direktori data
+# Direktori data & backup
 DATA_DIR=/opt/devplatform/data
+BACKUP_ROOT=/opt/devplatform/backups
 EOF
+chmod 600 .env
 echo -e "${GREEN}✓ File .env dibuat${NC}"
 
 # Generate nginx.conf dengan domain yang benar
@@ -287,9 +365,18 @@ echo -e "  pgAdmin (PostgreSQL): ${CYAN}https://pgadmin.$DOMAIN${NC}"
 echo -e "    Login email     : ${YELLOW}$PGADMIN_EMAIL${NC}"
 echo -e "    Login password  : ${YELLOW}$PGADMIN_PASSWORD${NC}"
 echo ""
-echo -e "${YELLOW}Langkah selanjutnya (HTTPS):${NC}"
+echo -e "${YELLOW}Langkah selanjutnya (WAJIB):${NC}"
 echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"
-echo -e "  2. Jalankan: sudo bash scripts/setup-https.sh"
-echo -e "  3. Tambah user: sudo bash scripts/add-user.sh namauser password port"
-echo -e "  4. ${RED}WAJIB: Ganti password admin dan user1 setelah login pertama!${NC}"
+echo -e "  2. Aktifkan HTTPS  : ${CYAN}sudo bash scripts/setup-https.sh${NC}"
+echo -e "  3. Pasang backup   : ${CYAN}sudo bash scripts/install-backup-cron.sh${NC}  (auto backup harian 02:30)"
+echo -e "  4. Hardening VPS   : ${CYAN}sudo bash scripts/harden-vps.sh${NC}  (sysctl + SSH key-only)"
+echo -e "  5. Tambah user     : ${CYAN}sudo bash scripts/add-user.sh namauser password port${NC}"
+echo -e "  6. ${RED}WAJIB: Login ke portal & ganti password admin/user1 (akan otomatis diminta)${NC}"
+echo ""
+echo -e "${BOLD}Akses DB Remote (DBeaver/Workbench):${NC}"
+if [ -n "$DB_REMOTE_IPS" ]; then
+  echo -e "  IP whitelist aktif : ${GREEN}$DB_REMOTE_IPS${NC}"
+else
+  echo -e "  ${YELLOW}Belum ada whitelist IP. Edit nanti dengan ufw allow from <IP> to any port 3306 / 5432${NC}"
+fi
 echo ""

@@ -190,10 +190,27 @@ Setiap user dapat akses MySQL & PostgreSQL dari laptop (DBeaver, MySQL Workbench
 | Password | (di dashboard) | (di dashboard) |
 | Default DB | `<username>_default` | `<username>_default` |
 
-⚠️ Pastikan firewall VPS allow port `3306` & `5432` (otomatis di-set oleh `install-vps.sh`).
-Cek dengan:
+⚠️ **Akses DB sekarang DI-WHITELIST per IP** (lebih aman). Hanya IP yang ada di
+`DB_REMOTE_IPS` di `.env` yang bisa konek.
+
+**Tambah IP baru ke whitelist:**
 ```bash
-sudo ufw status | grep -E "3306|5432"
+# Cek IP publik laptop kamu (jalankan di laptop, BUKAN di VPS!)
+curl ifconfig.me
+
+# Di VPS, tambahkan:
+sudo ufw allow from 203.0.113.5 to any port 3306 proto tcp
+sudo ufw allow from 203.0.113.5 to any port 5432 proto tcp
+sudo ufw reload
+
+# Cek hasilnya
+sudo ufw status numbered | grep -E "3306|5432"
+```
+
+**Hapus IP dari whitelist:**
+```bash
+sudo ufw status numbered             # cari nomor rule
+sudo ufw delete <nomor>
 ```
 
 ### Auto-Login phpMyAdmin
@@ -258,7 +275,7 @@ curl -I https://pgadmin.dev.netprem.org
 
 ---
 
-## 6️⃣ Database — Akses & Backup
+## 6️⃣ Database — Akses & Backup Otomatis
 
 ### Lihat Password DB
 ```bash
@@ -274,22 +291,98 @@ sudo docker exec -it devplatform-postgres psql -U postgres -d devplatform
 sudo docker exec -it devplatform-mysql mysql -uroot -p
 ```
 
-### Backup Database
+### 🔁 Backup Otomatis Harian (REKOMENDASI)
+Setelah install platform, daftarkan cron backup sekali saja:
 ```bash
-# PostgreSQL backup
-sudo docker exec devplatform-postgres pg_dumpall -U postgres > backup_pg_$(date +%F).sql
-
-# MySQL backup semua database
-sudo docker exec devplatform-mysql mysqldump -uroot -p --all-databases > backup_mysql_$(date +%F).sql
+cd ~/dev-platform
+sudo bash scripts/install-backup-cron.sh
 ```
 
-### Restore Database
-```bash
-# PostgreSQL restore
-cat backup_pg_2026-04-25.sql | sudo docker exec -i devplatform-postgres psql -U postgres
+Setelah dipasang, setiap hari jam **02:30** waktu server otomatis backup:
+- Semua database PostgreSQL (`pg_dumpall` → gzip)
+- Semua database MySQL (`mysqldump --all-databases` → gzip)
+- Folder workspace user `/opt/devplatform/data/` (kecuali `.trash` & `node_modules`)
+- Folder portal data (`users.json`, `audit.log`, settings)
+- Snapshot `.env` (chmod 600)
 
-# MySQL restore
-cat backup_mysql_2026-04-25.sql | sudo docker exec -i devplatform-mysql mysql -uroot -p
+**Retention:**
+- 7 backup harian terakhir → `/opt/devplatform/backups/daily/`
+- 4 backup mingguan (Minggu) → `/opt/devplatform/backups/weekly/`
+- 6 backup bulanan (tgl 1) → `/opt/devplatform/backups/monthly/`
+
+**Cek status & jalankan manual:**
+```bash
+sudo crontab -l                                       # cek cron terdaftar
+sudo bash ~/dev-platform/scripts/backup.sh            # jalankan sekarang
+ls -lh /opt/devplatform/backups/daily/                # lihat hasil backup
+tail -f /var/log/devplatform-backup.log               # lihat log backup
+```
+
+### Backup Manual Cepat (kalau perlu sebelum update)
+```bash
+sudo bash ~/dev-platform/scripts/backup.sh
+# Output: /opt/devplatform/backups/daily/<timestamp>/
+```
+
+### Restore dari Backup
+```bash
+# Pilih folder backup
+ls /opt/devplatform/backups/daily/
+BK=/opt/devplatform/backups/daily/20260425-023000
+
+# Restore PostgreSQL (--clean --if-exists sudah ada di dump)
+gunzip -c $BK/postgres-all.sql.gz | sudo docker exec -i devplatform-postgres psql -U postgres
+
+# Restore MySQL (semua database)
+gunzip -c $BK/mysql-all.sql.gz | sudo docker exec -i devplatform-mysql mysql -uroot -p$MYSQL_ROOT_PASSWORD
+
+# Restore workspace user
+sudo tar -xzf $BK/workspace.tar.gz -C /opt/devplatform/
+
+# Restore data portal (users.json, audit.log)
+sudo tar -xzf $BK/portal-data.tar.gz -C ~/dev-platform/server/
+
+# Restart semua container
+cd ~/dev-platform && sudo docker compose restart
+```
+
+### Copy Backup ke Tempat Aman (offsite)
+```bash
+# Sync backup ke local laptop via rsync (jalankan di laptop)
+rsync -avz --progress user@20.200.209.228:/opt/devplatform/backups/ ~/devplatform-backups/
+
+# Atau ke S3/object storage (perlu aws-cli)
+# aws s3 sync /opt/devplatform/backups/ s3://my-bucket/devplatform/
+```
+
+---
+
+## 6B️⃣ Hardening VPS (Sekali Pasang)
+
+Setelah install platform, **wajib** jalankan script hardening:
+```bash
+cd ~/dev-platform
+sudo bash scripts/harden-vps.sh
+```
+
+Yang dilakukan otomatis:
+- ✅ **fail2ban**: ban IP yang gagal login SSH 4× dalam 10 menit (ban 6 jam)
+- ✅ **unattended-upgrades**: auto install security patch Ubuntu setiap hari
+- ✅ **Docker daemon hardening**: log rotation 10MB×3 file, no-new-privileges, live-restore
+- ✅ **sysctl hardening**: SYN flood protection, ICMP redirect off, IP spoof protection
+- ✅ **SSH hardening**: disable password auth (HANYA kalau key terdeteksi — aman dari lock-out!)
+
+**Cek hasil hardening:**
+```bash
+sudo fail2ban-client status sshd                    # lihat IP yang di-ban
+sudo systemctl status unattended-upgrades           # cek auto-update aktif
+sudo cat /etc/sysctl.d/99-devplatform.conf          # lihat sysctl rules
+sudo cat /etc/ssh/sshd_config.d/99-devplatform.conf # lihat SSH config
+```
+
+**Unban IP yang ke-ban:**
+```bash
+sudo fail2ban-client set sshd unbanip 1.2.3.4
 ```
 
 ---
@@ -396,11 +489,117 @@ sudo docker compose restart postgres mysql
 
 ---
 
+## 1️⃣1️⃣ Fitur Multi-Project (per User)
+
+Setiap user sekarang bisa punya banyak project di code-server-nya sendiri,
+dengan tombol **Buat / Rename / Hapus** dari dashboard.
+
+- Akses: dashboard → tab **Project Saya**
+- **Buat project**: tombol **+ Project Baru** → nama project (huruf, angka, dash, underscore)
+- **Rename**: tombol pensil di kanan project
+- **Hapus**: tombol X → modal minta **ketik ulang nama project** (anti misclick) →
+  project dipindah ke `.trash/<nama>-<timestamp>/` (soft delete, masih bisa restore)
+- **Restore**: tombol pulihkan dari section "Sampah" di dashboard
+- **Hapus permanen**: kosongkan `.trash/` dengan
+  `sudo rm -rf /opt/devplatform/data/<username>/.trash/*`
+
+Folder fisik: `/opt/devplatform/data/<username>/<project>/`
+
+---
+
+## 1️⃣2️⃣ Audit Log (Siapa Ngapain Kapan)
+
+Semua aksi penting dicatat ke `server/data/audit.log` (JSONL append-only):
+- Login sukses & gagal (dengan IP)
+- Tambah / hapus user
+- Buat / hapus database
+- Ganti password
+- Buat / hapus / rename project
+
+**Lihat dari Admin Panel:**
+1. Login admin → Panel Admin
+2. Tab **Audit Log** (auto-refresh 30 detik) — filter berdasarkan user atau aksi
+
+**Lihat raw log dari SSH:**
+```bash
+tail -f ~/dev-platform/server/data/audit.log              # live
+cat ~/dev-platform/server/data/audit.log | tail -100      # 100 entry terakhir
+
+# Filter login gagal
+grep '"action":"login_failed"' ~/dev-platform/server/data/audit.log | tail -20
+```
+
+**Rotasi audit log** (kalau sudah > 100MB, rotate manual):
+```bash
+sudo mv ~/dev-platform/server/data/audit.log \
+        ~/dev-platform/server/data/audit-$(date +%F).log
+sudo docker restart devplatform-portal
+```
+
+---
+
+## 1️⃣3️⃣ Kuota Disk per User
+
+Dashboard user menampilkan **Kuota Disk** (dihitung dari `du` real-time terhadap
+folder `/opt/devplatform/data/<username>/`). Tidak ada quota enforcement OS-level
+(quota XFS), tapi:
+
+- Container code-server dibatasi RAM `CODE_SERVER_MEM` (default 2GB) & CPU `1.5` core
+- PIDs limit 300 supaya fork-bomb tidak crash VPS
+- Admin bisa lihat penggunaan disk semua user di Panel Admin
+
+Cek manual:
+```bash
+sudo du -sh /opt/devplatform/data/*/
+```
+
+---
+
+## 1️⃣4️⃣ Force Change Password
+
+User baru (atau yang di-reset password) **wajib ganti password** di login pertama:
+- Saat login, langsung di-redirect ke `/change-password-required`
+- Tidak bisa akses dashboard sebelum ganti
+- Password baru harus lulus policy:
+  - Minimal 10 karakter
+  - Harus ada huruf besar, kecil, angka, simbol
+  - TIDAK boleh sama dengan username
+  - TIDAK boleh ulangi karakter sama 4×
+  - TIDAK boleh password umum (123456789, password, dll)
+
+User lama yang sudah pernah login akan otomatis diminta ganti hanya kalau admin
+me-reset passwordnya.
+
+---
+
 ## 📝 Catatan Keamanan
 
-- File `.env` **JANGAN** di-commit ke GitHub (sudah ada di `.gitignore`)
-- Folder `attached_assets/` **JANGAN** di-commit (sering ada secret/token)
-- Backup `.env` ke tempat aman (password manager)
-- Backup folder `/opt/devplatform/data/` rutin (data project user)
-- Backup database rutin (lihat bagian 6)
-- Ganti password default `admin` & `user1` setelah install pertama
+### Wajib Dilakukan
+- ✅ File `.env` **JANGAN** di-commit ke GitHub (sudah ada di `.gitignore`)
+- ✅ Folder `attached_assets/` **JANGAN** di-commit (sering ada secret/token)
+- ✅ Backup `.env` ke tempat aman (password manager)
+- ✅ Pasang cron backup harian: `sudo bash scripts/install-backup-cron.sh`
+- ✅ Hardening VPS sekali: `sudo bash scripts/harden-vps.sh`
+- ✅ Ganti password default `admin` & `user1` setelah install pertama (otomatis diminta)
+- ✅ Whitelist IP DB di `.env` (`DB_REMOTE_IPS`) — jangan biarkan kosong di production
+
+### Variabel Penting di .env (Cek Setelah Install)
+| Variabel | Default | Keterangan |
+|----------|---------|-----------|
+| `IDLE_TIMEOUT_MIN` | 60 | User di-logout otomatis setelah X menit idle |
+| `DB_REMOTE_IPS` | (kosong) | IP yang boleh konek MySQL/PG dari luar |
+| `CODE_SERVER_MEM` | 2g | RAM limit per container code-server |
+| `CODE_SERVER_CPUS` | 1.5 | CPU limit per container code-server |
+| `CODE_SERVER_PIDS` | 300 | PID limit per container (anti fork-bomb) |
+| `BACKUP_ROOT` | /opt/devplatform/backups | Lokasi backup |
+
+### Pengamanan Aplikasi (Otomatis Aktif)
+- 🔒 CSRF double-submit cookie (semua POST/DELETE diperiksa)
+- 🔒 Helmet CSP, HSTS (saat HTTPS), X-Frame-Options
+- 🔒 Rate limit login 10×/15 menit per IP
+- 🔒 bcrypt cost 12 untuk password storage
+- 🔒 Session rolling (renewed setiap request) + idle timeout
+- 🔒 Audit log untuk semua aksi sensitif
+- 🔒 Soft-delete project (anti misclick, bisa restore dari .trash)
+- 🔒 Container resource limits (RAM/CPU/PID)
+- 🔒 fail2ban jail SSH (lewat `harden-vps.sh`)

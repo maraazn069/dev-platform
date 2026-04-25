@@ -4,17 +4,24 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const userManager = require('../services/userManager');
+const projectManager = require('../services/projectManager');
+const diskUsage = require('../services/diskUsage');
+const audit = require('../services/auditLog');
 
 const USERS_FILE = path.join(__dirname, '../data/users.json');
 
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.user) return res.status(401).json({ error: 'Unauthorized' });
+  if (req.session.user.mustChangePassword) {
+    return res.status(423).json({ error: 'must_change_password', message: 'Ganti password dulu.' });
+  }
   next();
 }
 
 function requireAdmin(req, res, next) {
   if (!req.session || !req.session.user) return res.status(401).json({ error: 'Unauthorized' });
   if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  if (req.session.user.mustChangePassword) return res.status(423).json({ error: 'must_change_password' });
   next();
 }
 
@@ -79,6 +86,9 @@ router.get('/users/status', requireAdmin, (req, res) => {
       projects: u.projects || [],
       databases: u.databases || [],
       hasDbCredentials: !!(u.mysqlPassword && u.pgPassword),
+      mustChangePassword: !!u.mustChangePassword,
+      deletionPending: !!u.deletionPending,
+      diskKb: diskUsage.getUserUsageKb(u.username),
       createdAt: u.createdAt,
       container: {
         status: containerStatus,
@@ -139,22 +149,94 @@ router.post('/databases', requireAuth, (req, res) => {
   const { type, name } = req.body;
   const username = req.session.user.username;
   const result = userManager.createDatabase(username, type, name);
+  audit.log('db.create', { type, name, success: result.success }, req);
   res.json(result);
 });
 
 router.delete('/databases/:type/:name', requireAuth, (req, res) => {
   const { type, name } = req.params;
+  const { confirm } = req.body || {};
+  if (confirm !== name) {
+    return res.json({ success: false, message: `Konfirmasi: kirim body { "confirm": "${name}" }.` });
+  }
   const username = req.session.user.username;
   const result = userManager.dropDatabase(username, type, name);
+  audit.log('db.drop', { type, name, success: result.success }, req);
   res.json(result);
+});
+
+// ===== Project management (per user) =====
+
+router.get('/my/projects', requireAuth, (req, res) => {
+  const username = req.session.user.username;
+  res.json({
+    projects: projectManager.listProjects(username),
+    trash: projectManager.listTrash(username)
+  });
+});
+
+router.post('/my/projects', requireAuth, (req, res) => {
+  const { name } = req.body;
+  const username = req.session.user.username;
+  const result = projectManager.createProject(username, name);
+  if (result.success) audit.log('project.create', { name, username }, req);
+  res.json(result);
+});
+
+router.patch('/my/projects/:name', requireAuth, (req, res) => {
+  const { name } = req.params;
+  const { newName } = req.body;
+  const username = req.session.user.username;
+  const result = projectManager.renameProject(username, name, newName);
+  if (result.success) audit.log('project.rename', { from: name, to: newName, username }, req);
+  res.json(result);
+});
+
+router.delete('/my/projects/:name', requireAuth, (req, res) => {
+  const { name } = req.params;
+  const { confirm } = req.body || {};
+  if (confirm !== name) {
+    return res.json({ success: false, message: `Konfirmasi: kirim body { "confirm": "${name}" } yang sama dengan nama project.` });
+  }
+  const username = req.session.user.username;
+  const result = projectManager.softDeleteProject(username, name);
+  if (result.success) audit.log('project.soft_delete', { name, username }, req);
+  res.json(result);
+});
+
+router.post('/my/trash/:trashName/restore', requireAuth, (req, res) => {
+  const { trashName } = req.params;
+  const username = req.session.user.username;
+  const result = projectManager.restoreProject(username, trashName);
+  if (result.success) audit.log('project.restore', { trashName, username }, req);
+  res.json(result);
+});
+
+router.delete('/my/trash/:trashName', requireAuth, (req, res) => {
+  const { trashName } = req.params;
+  const username = req.session.user.username;
+  const result = projectManager.permanentDeleteTrash(username, trashName);
+  if (result.success) audit.log('project.purge', { trashName, username }, req);
+  res.json(result);
+});
+
+// ===== Disk usage =====
+router.get('/my/usage', requireAuth, (req, res) => {
+  const username = req.session.user.username;
+  const usedKb = diskUsage.getUserUsageKb(username);
+  const free = diskUsage.getDiskFree();
+  res.json({
+    user: {
+      username,
+      usedKb,
+      usedHuman: diskUsage.formatHuman(usedKb)
+    },
+    disk: free
+  });
 });
 
 // ===== Auto-login launchers =====
 
-/**
- * Auto-submit form ke phpMyAdmin dengan kredensial user.
- * Browser akan POST ke phpMyAdmin login → user langsung masuk.
- */
 router.get('/launch/phpmyadmin', requireAuth, (req, res) => {
   const username = req.session.user.username;
   const creds = userManager.getCredentials(username);
@@ -194,13 +276,10 @@ router.get('/launch/phpmyadmin', requireAuth, (req, res) => {
   <script>document.getElementById('f').submit();</script>
 </body>
 </html>`;
+  audit.log('launch.phpmyadmin', { db: targetDb }, req);
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
-/**
- * Buka pgAdmin + tampilkan kredensial yang harus dipakai user untuk add server connection.
- * (pgAdmin tidak support SSO via form karena pakai CSRF token, jadi kita kasih instruksi jelas.)
- */
 router.get('/launch/pgadmin', requireAuth, (req, res) => {
   const username = req.session.user.username;
   const creds = userManager.getCredentials(username);
@@ -214,9 +293,6 @@ router.get('/launch/pgadmin', requireAuth, (req, res) => {
   const dbName = `${username}_default`;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-  // SECURITY: Do NOT render the shared pgAdmin admin email/password to user-facing pages.
-  // The admin password gives full access to other users' saved connections inside pgAdmin.
-  // Admin must share pgAdmin login privately (e.g. password manager) with each user.
   const html = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -272,6 +348,7 @@ router.get('/launch/pgadmin', requireAuth, (req, res) => {
   </div>
 </body>
 </html>`;
+  audit.log('launch.pgadmin', {}, req);
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
@@ -286,7 +363,17 @@ router.get('/projects/:username', requireAuth, (req, res) => {
 
   const domain = process.env.DOMAIN || 'dev.example.com';
   const protocol = process.env.PROTOCOL || 'http';
-  const projects = (user.projects || ['default']).map(p => ({
+
+  // Pakai project list dari filesystem (sumber kebenaran), fallback ke users.json
+  let projectNames;
+  try {
+    const fsList = projectManager.listProjects(username).map(p => p.name);
+    projectNames = fsList.length > 0 ? fsList : (user.projects || ['default']);
+  } catch {
+    projectNames = user.projects || ['default'];
+  }
+
+  const projects = projectNames.map(p => ({
     name: p,
     url: `${protocol}://${username}.${domain}/?folder=/config/projects/${p}`,
     localPort: `http://localhost:${user.port}/?folder=/config/projects/${p}`

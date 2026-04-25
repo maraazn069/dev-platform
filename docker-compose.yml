@@ -32,6 +32,11 @@ services:
       - PGADMIN_EMAIL=${PGADMIN_EMAIL:-admin@local.dev}
       - PGADMIN_PASSWORD=${PGADMIN_PASSWORD:-admin123}
       - TZ=${TZ:-Asia/Jakarta}
+      - IDLE_TIMEOUT_MIN=${IDLE_TIMEOUT_MIN:-60}
+      - CODE_SERVER_MEM=${CODE_SERVER_MEM:-2g}
+      - CODE_SERVER_CPUS=${CODE_SERVER_CPUS:-1.5}
+      - CODE_SERVER_PIDS=${CODE_SERVER_PIDS:-300}
+      - DB_REMOTE_IPS=${DB_REMOTE_IPS:-}
     volumes:
       - ./server/data:/app/server/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -39,6 +44,12 @@ services:
       - ./nginx/nginx.conf:/app/nginx/nginx.conf
     networks:
       - devplatform
+    deploy:
+      resources:
+        limits: { memory: 512M, cpus: '0.5' }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))"]
       interval: 10s
@@ -81,6 +92,12 @@ services:
       - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - devplatform
+    deploy:
+      resources:
+        limits: { memory: 2G, cpus: '1.0' }
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -105,6 +122,12 @@ services:
       - ./scripts/init-mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - devplatform
+    deploy:
+      resources:
+        limits: { memory: 2G, cpus: '1.0' }
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --bind-address=0.0.0.0
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]

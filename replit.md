@@ -220,3 +220,103 @@ akses remote dari laptop (DBeaver/Workbench), dan auto-login ke phpMyAdmin tanpa
 - Admin: `admin` / `admin123`
 - User 1 (lama): `user1` / `user1234` — perlu klik **Repair DB** di admin panel
   supaya dapat kredensial DB
+
+## Update Sesi (Apr 25 - Hardening Komprehensif) ⭐ PRODUCTION READY
+### Tujuan
+Pengetatan keamanan menyeluruh, fitur multi-project per user, audit log, backup
+otomatis, dan hardening VPS.
+
+### Backend Hardening
+- **CSRF middleware** (`server/middleware/csrf.js`) — double-submit cookie pattern,
+  cookie `devplatform.csrf` (httpOnly:false supaya JS bisa baca), header
+  `X-CSRF-Token` wajib di POST/PUT/DELETE. Exempt: `/auth/login`, `/health`, `/csrf-token`
+- **Helmet diperketat**: CSP konservatif, HSTS (saat HTTPS), referrerPolicy
+- **Session rolling**: cookie diperpanjang setiap request, idle timeout via
+  `IDLE_TIMEOUT_MIN` env (default 60 menit) — middleware cek `lastActivity`
+- **Body size**: tetap 1MB
+- **Bcrypt cost 12** untuk password user (provisionUser, resetPassword)
+
+### Password Policy + Force Change
+- `server/services/passwordPolicy.js` `validateStrong({password, username})`:
+  - Min 10 char, harus uppercase + lowercase + digit + symbol
+  - Tidak boleh berisi username (substring)
+  - Tidak boleh repeat char ≥4×
+  - Blacklist password umum (top common passwords)
+- Default users (admin/admin123, user1/user1234) seeded dengan
+  `mustChangePassword=true` saat fresh install. Runtime migration: user lama yang
+  belum punya `passwordChangedAt` di-flag `mustChangePassword=true` automatically
+- Middleware dashboard cek flag → redirect ke `/change-password-required`
+- Halaman `public/change-password-required.html` dengan **live policy checker**
+  (warna hijau real-time per requirement)
+
+### Audit Log
+- `server/services/auditLog.js` — append-only JSONL ke `server/data/audit.log`
+- Logged: login_success, login_failed, logout, user_added, user_removed,
+  password_changed, password_reset, db_created, db_dropped, project_created,
+  project_renamed, project_deleted, project_restored
+- Endpoint admin `GET /admin/audit?limit=100&user=foo&action=login_failed` (paginated)
+- Tab **Audit Log** di admin.html, auto-refresh 30 detik, filter by user/action
+
+### Multi-Project per User
+- `server/services/projectManager.js`: list/create/rename/softDelete/restore
+- Soft delete pindah folder ke `<userdata>/.trash/<name>-<timestamp>/`
+- Restore baca isi `.trash/`, pindah balik (skip kalau nama sudah ada)
+- Validasi nama: `^[a-zA-Z0-9_-]{1,40}$`, tidak boleh `..`, tidak boleh nama reserved
+- Routes `/api/my/projects` (GET list, POST create, PATCH rename, DELETE soft-delete,
+  POST `/restore` restore from trash)
+- Dashboard UI: section **Project Saya** dengan grid card, tombol create/rename/delete,
+  modal konfirmasi delete dengan **typed confirmation** (user harus ketik ulang nama)
+- Section **Sampah** menampilkan trash items dengan tombol Pulihkan
+
+### Container Resource Limits (anti-DoS noisy neighbor)
+- `userManager.js createCodeServerContainer` tambah flag:
+  - `--memory ${CODE_SERVER_MEM:-2g}` & `--memory-swap` sama (no swap leak)
+  - `--cpus ${CODE_SERVER_CPUS:-1.5}`
+  - `--pids-limit ${CODE_SERVER_PIDS:-300}` (anti fork-bomb)
+  - `--security-opt no-new-privileges`
+  - `--log-driver json-file --log-opt max-size=10m --log-opt max-file=3`
+- `docker-compose.yml`: `deploy.resources.limits` ditambah ke portal (512M/.5cpu),
+  postgres (2G/1cpu), mysql (2G/1cpu) + log rotation json-file 10-20MB
+
+### Disk Usage Widget
+- `server/services/diskUsage.js` — pakai `du -sb` per user folder
+- Endpoint `GET /api/my/disk-usage` (cached 60 detik supaya tidak expensive)
+- Dashboard menampilkan **Kuota Disk: X MB** dengan progress bar visual
+
+### Ops Scripts Baru
+- `scripts/backup.sh` — pg_dumpall + mysqldump --all-databases + tar workspace
+  + tar portal data + copy .env (chmod 600). Retention: 7 daily, 4 weekly (Minggu),
+  6 monthly (tgl 1). Output: `/opt/devplatform/backups/{daily,weekly,monthly}/<TS>/`
+- `scripts/install-backup-cron.sh` — daftar cron 02:30 daily, pasang logrotate
+  untuk `/var/log/devplatform-backup.log` (weekly, 8 file, compress)
+- `scripts/harden-vps.sh` — fail2ban (jail SSH 4×/10m), unattended-upgrades
+  (auto security patch), `/etc/docker/daemon.json` (log rotation, no-new-privileges,
+  live-restore), sysctl (SYN flood, ICMP redirect off, IP spoof), SSH disable
+  password auth **HANYA kalau key terdeteksi** (anti lock-out)
+- `scripts/install-vps.sh` updated:
+  - Prompt **DB_REMOTE_IPS** (whitelist IP)
+  - Prompt **IDLE_TIMEOUT_MIN**
+  - Auto-install fail2ban + unattended-upgrades
+  - Auto-tulis `/etc/docker/daemon.json`
+  - UFW: `ufw allow from <IP> to any port 3306/5432` per IP whitelist (BUKAN
+    blanket allow 3306/5432) — kalau kosong, port DB tidak terbuka publik
+  - chmod 600 `.env` setelah generate
+  - Pesan akhir: hint jalankan setup-https + install-backup-cron + harden-vps
+
+### .env.example Baru (Variabel Tambahan)
+- `IDLE_TIMEOUT_MIN=60` — idle logout
+- `DB_REMOTE_IPS=` — whitelist IP DB remote
+- `CODE_SERVER_MEM=2g`, `CODE_SERVER_CPUS=1.5`, `CODE_SERVER_PIDS=300`
+- `BACKUP_ROOT=/opt/devplatform/backups`
+
+### Migration Notes (Existing VPS)
+Saat user `git pull` di VPS lama, untuk dapat fitur baru:
+1. `cd ~/dev-platform && git pull origin main`
+2. Tambah variabel baru ke `.env` manual atau hapus & re-generate via install-vps.sh
+3. `sudo docker compose down && sudo docker compose up -d --build portal`
+4. **WAJIB** `sudo bash scripts/install-backup-cron.sh` (sekali)
+5. **WAJIB** `sudo bash scripts/harden-vps.sh` (sekali)
+6. Re-run `sudo bash scripts/install-vps.sh` (rerun aman, tidak destroy data)
+   atau manual `ufw delete allow 3306` dan tambah whitelist per IP
+7. Login admin → akan otomatis diminta ganti password (mustChangePassword migrasi
+   runtime untuk user yang belum punya `passwordChangedAt`)

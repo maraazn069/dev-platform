@@ -7,7 +7,8 @@
     "displayName": "Administrator",
     "port": null,
     "projects": [],
-    "createdAt": "2026-04-25T02:18:09.980Z"
+    "createdAt": "2026-04-25T02:18:09.980Z",
+    "mustChangePassword": true
   },
   {
     "id": "user-001",
@@ -21,6 +22,7 @@
       "belajar-python",
       "belajar-web"
     ],
-    "createdAt": "2026-04-25T02:18:10.060Z"
+    "createdAt": "2026-04-25T02:18:10.060Z",
+    "mustChangePassword": true
   }
 ]

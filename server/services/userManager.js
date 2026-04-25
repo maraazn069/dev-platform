@@ -22,7 +22,11 @@ function getUsers() {
 }
 
 function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+  // Atomic write: tulis ke .tmp lalu rename. Mencegah users.json corrupt
+  // kalau proses crash / disk full di tengah penulisan.
+  const tmp = USERS_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(users, null, 2));
+  fs.renameSync(tmp, USERS_FILE);
 }
 
 function isValidName(name) {
@@ -115,13 +119,29 @@ function createCodeServerContainer(username, password) {
     fs.mkdirSync(`${userDir}/projects/belajar-python`, { recursive: true });
     fs.mkdirSync(`${userDir}/projects/belajar-web`, { recursive: true });
     fs.mkdirSync(`${userDir}/config`, { recursive: true });
+    fs.mkdirSync(`${userDir}/.trash`, { recursive: true });
   } catch (e) { /* ok if exists */ }
+
+  // SECURITY/STABILITY: Resource limits + no-new-privileges + log rotation.
+  // We deliberately do NOT cap_drop ALL because linuxserver code-server image needs
+  // a wide set of caps (s6 init, su-exec, sudo) and dropping breaks startup.
+  // Per-user limits prevent one tenant from OOM/CPU-starving the host.
+  const memLimit = process.env.CODE_SERVER_MEM || '2g';
+  const cpuLimit = process.env.CODE_SERVER_CPUS || '1.5';
+  const pidsLimit = process.env.CODE_SERVER_PIDS || '300';
 
   return dockerCmd([
     'run', '-d',
     '--name', `codeserver-${username}`,
     '--restart', 'unless-stopped',
     '--network', network,
+    '--memory', memLimit,
+    '--memory-swap', memLimit,
+    '--cpus', cpuLimit,
+    '--pids-limit', pidsLimit,
+    '--security-opt', 'no-new-privileges:true',
+    '--log-opt', 'max-size=10m',
+    '--log-opt', 'max-file=3',
     '-e', 'PUID=1000',
     '-e', 'PGID=1000',
     '-e', `TZ=${process.env.TZ || 'Asia/Jakarta'}`,
@@ -181,11 +201,12 @@ function provisionUser({ username, password, displayName, email }) {
   if (!r6.success) errors.push('nginx: ' + r6.message);
 
   // 5) Save to users.json
+  // mustChangePassword=true → user dipaksa ganti password admin-set saat login pertama
   const newUser = {
     id: uuidv4(),
     username,
     email: email || '',
-    password: bcrypt.hashSync(password, 10),
+    password: bcrypt.hashSync(password, 12),
     role: 'user',
     displayName: displayName || username,
     port,
@@ -196,6 +217,7 @@ function provisionUser({ username, password, displayName, email }) {
     ],
     mysqlPassword,
     pgPassword,
+    mustChangePassword: true,
     createdAt: new Date().toISOString()
   };
   users.push(newUser);

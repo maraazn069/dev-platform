@@ -174,6 +174,28 @@
       </table>
     </div>
 
+    <div class="section-title">
+      Audit Log (200 entry terakhir)
+      <button class="refresh-btn" onclick="loadAudit()">↻ Refresh</button>
+    </div>
+    <div class="table-wrapper" style="margin-bottom:32px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:160px;">Waktu</th>
+            <th style="width:130px;">Aksi</th>
+            <th style="width:110px;">Aktor</th>
+            <th style="width:110px;">Target</th>
+            <th>Detail</th>
+            <th style="width:120px;">IP</th>
+          </tr>
+        </thead>
+        <tbody id="auditTableBody">
+          <tr><td colspan="6" style="text-align:center;color:#6e7681;padding:24px;">Memuat audit log...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <div class="section-title">Database Server</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:32px;">
       <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:18px;">
@@ -210,8 +232,9 @@
         <input type="text" id="newDisplayName" placeholder="contoh: Budi Santoso">
       </div>
       <div class="form-group">
-        <label>Password Awal <small style="color:#6e7681;">(min. 6 karakter)</small></label>
+        <label>Password Awal <small style="color:#6e7681;">(min. 10 karakter, 3 dari: huruf besar/kecil/angka/simbol)</small></label>
         <input type="text" id="newPassword" placeholder="Password login portal">
+        <div style="font-size:.7rem;color:#8b949e;margin-top:4px;">User akan dipaksa ganti password ini saat login pertama.</div>
       </div>
       <div class="form-group">
         <label>Email <small style="color:#6e7681;">(opsional)</small></label>
@@ -246,12 +269,40 @@
       <input type="hidden" id="resetUsername">
       <div class="form-group">
         <label>Password Baru untuk <strong id="resetForUser" style="color:#58a6ff;"></strong></label>
-        <input type="text" id="resetNewPw" placeholder="Password baru">
+        <input type="text" id="resetNewPw" placeholder="Min. 10 karakter, 3 jenis karakter">
+        <div style="font-size:.7rem;color:#8b949e;margin-top:4px;">User akan dipaksa ganti password ini saat login berikutnya.</div>
       </div>
       <div class="alert" id="resetPwAlert"></div>
       <div class="modal-btns">
         <button class="btn-cancel" onclick="closeModal('resetPwModal')">Batal</button>
         <button class="btn-primary" onclick="resetPassword()">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Hapus User (konfirmasi ketik username) -->
+  <div class="modal-overlay" id="removeUserModal">
+    <div class="modal">
+      <h3 style="color:#f85149;">⚠️ Hapus User</h3>
+      <input type="hidden" id="removeUsername">
+      <p style="font-size:.85rem;color:#8b949e;margin-bottom:12px;">
+        Aksi ini akan <strong style="color:#f85149;">PERMANEN MENGHAPUS</strong>:
+      </p>
+      <ul style="font-size:.82rem;color:#c9d1d9;margin-left:18px;margin-bottom:14px;">
+        <li>Container code-server user</li>
+        <li>Semua database MySQL & PostgreSQL milik user</li>
+        <li>Direktori <code style="color:#79c0ff;">/opt/devplatform/data/&lt;user&gt;/</code> berisi semua project</li>
+        <li>Subdomain Nginx</li>
+      </ul>
+      <p style="color:#f85149;font-size:.82rem;margin-bottom:12px;">⚠️ Tidak bisa di-undo!</p>
+      <div class="form-group">
+        <label>Untuk konfirmasi, ketik username <strong id="removeExpect" style="color:#f85149;"></strong> di bawah:</label>
+        <input type="text" id="removeConfirm" placeholder="ketik username persis">
+      </div>
+      <div class="alert" id="removeUserAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('removeUserModal')">Batal</button>
+        <button class="btn-primary" style="background:#da3633;" onclick="confirmRemoveUser()">Hapus PERMANEN</button>
       </div>
     </div>
   </div>
@@ -277,6 +328,23 @@
   <script>
     let allUsers = [];
 
+    // CSRF helper — token diset oleh server di cookie 'devplatform.csrf'
+    function getCsrfToken() {
+      const m = document.cookie.match(/(?:^|; )devplatform\.csrf=([^;]+)/);
+      return m ? m[1] : '';
+    }
+    async function csrfFetch(url, opts = {}) {
+      const headers = Object.assign({}, opts.headers || {}, { 'X-CSRF-Token': getCsrfToken() });
+      if (opts.body && typeof opts.body !== 'string') {
+        headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(opts.body);
+      }
+      return fetch(url, Object.assign({}, opts, { headers }));
+    }
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     async function init() {
       const res = await fetch('/dashboard/me');
       if (!res.ok) return window.location.href = '/login';
@@ -293,7 +361,42 @@
       if (pgRem) pgRem.textContent = `${host}:5432`;
       if (myRem) myRem.textContent = `${host}:3306`;
       loadUsers();
+      loadAudit();
       setInterval(loadUsers, 15000);
+      setInterval(loadAudit, 30000);
+    }
+
+    async function loadAudit() {
+      const res = await fetch('/admin/audit?limit=200');
+      if (!res.ok) return;
+      const data = await res.json();
+      const tbody = document.getElementById('auditTableBody');
+      const entries = data.entries || [];
+      if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6e7681;padding:20px;">Belum ada aktivitas tercatat.</td></tr>';
+        return;
+      }
+      const colors = {
+        'login.success': '#3fb950', 'login.fail': '#f85149', 'logout': '#8b949e',
+        'password.change': '#58a6ff', 'user.add': '#3fb950', 'user.remove': '#f85149',
+        'user.repair-db': '#f0883e', 'user.reset-password': '#f0883e',
+        'project.create': '#58a6ff', 'project.delete': '#f85149', 'project.rename': '#58a6ff',
+        'project.restore': '#3fb950', 'db.create': '#58a6ff', 'db.drop': '#f85149',
+        'csrf.fail': '#f85149'
+      };
+      tbody.innerHTML = entries.reverse().map(e => {
+        const ts = new Date(e.ts).toLocaleString('id-ID', { hour12: false });
+        const color = colors[e.action] || '#c9d1d9';
+        const detail = e.detail ? escHtml(JSON.stringify(e.detail)) : '';
+        return `<tr>
+          <td style="color:#8b949e;font-family:monospace;font-size:.75rem;">${ts}</td>
+          <td><span style="color:${color};font-weight:600;font-size:.78rem;">${escHtml(e.action)}</span></td>
+          <td style="font-size:.8rem;color:#f0f6fc;">${escHtml(e.actor || '-')}</td>
+          <td style="font-size:.8rem;color:#f0f6fc;">${escHtml(e.target || '-')}</td>
+          <td style="font-size:.75rem;color:#8b949e;font-family:monospace;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${detail}">${detail || '-'}</td>
+          <td style="font-size:.75rem;color:#8b949e;font-family:monospace;">${escHtml(e.ip || '-')}</td>
+        </tr>`;
+      }).join('');
     }
 
     async function loadUsers() {
@@ -369,15 +472,14 @@
       alertEl.className = 'alert'; alertEl.style.display='none'; credsEl.style.display='none';
       alertEl.textContent = 'Sedang membuat user (provision MySQL + PostgreSQL + container)...'; alertEl.style.display='block';
 
-      const res = await fetch('/admin/users/add', {
+      const res = await csrfFetch('/admin/users/add', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           username,
           displayName: document.getElementById('newDisplayName').value,
           password,
           email: document.getElementById('newEmail').value
-        })
+        }
       });
       const data = await res.json();
       alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
@@ -396,24 +498,41 @@
       }
     }
 
-    async function removeUser(username) {
-      if (!confirm(`Hapus user "${username}" SEKARANG? Container, database MySQL, dan database PostgreSQL akan ikut DIHAPUS PERMANEN.`)) return;
-      const res = await fetch('/admin/users/remove', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
-      });
+    function removeUser(username) {
+      document.getElementById('removeUsername').value = username;
+      document.getElementById('removeExpect').textContent = username;
+      document.getElementById('removeConfirm').value = '';
+      document.getElementById('removeUserAlert').style.display = 'none';
+      document.getElementById('removeUserModal').classList.add('open');
+    }
+
+    async function confirmRemoveUser() {
+      const alertEl = document.getElementById('removeUserAlert');
+      const username = document.getElementById('removeUsername').value;
+      const confirm = document.getElementById('removeConfirm').value;
+      if (confirm !== username) {
+        alertEl.className = 'alert error';
+        alertEl.textContent = 'Username konfirmasi tidak cocok.';
+        alertEl.style.display = 'block';
+        return;
+      }
+      alertEl.className = 'alert';
+      alertEl.textContent = 'Sedang menghapus user (container, database, files)...';
+      alertEl.style.display = 'block';
+      const res = await csrfFetch('/admin/users/remove', { method: 'POST', body: { username, confirm } });
       const data = await res.json();
-      if (data.success) { loadUsers(); alert(data.message); }
-      else alert('Error: ' + data.message);
+      alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
+      alertEl.textContent = data.message;
+      if (data.success) {
+        setTimeout(() => { closeModal('removeUserModal'); loadUsers(); loadAudit(); }, 1200);
+      }
     }
 
     async function repairDb(username) {
       if (!confirm(`Generate ulang credentials database untuk "${username}"? Password lama akan tidak berlaku.`)) return;
-      const res = await fetch('/admin/users/repair-db', {
+      const res = await csrfFetch('/admin/users/repair-db', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
+        body: { username }
       });
       const data = await res.json();
       if (data.success) {
@@ -455,13 +574,12 @@
 
     async function resetPassword() {
       const alert = document.getElementById('resetPwAlert');
-      const res = await fetch('/admin/users/reset-password', {
+      const res = await csrfFetch('/admin/users/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           username: document.getElementById('resetUsername').value,
           newPassword: document.getElementById('resetNewPw').value
-        })
+        }
       });
       const data = await res.json();
       alert.className = 'alert ' + (data.success ? 'success' : 'error');
@@ -477,13 +595,12 @@
 
     async function addProject() {
       const alert = document.getElementById('addProjectAlert');
-      const res = await fetch('/admin/users/add-project', {
+      const res = await csrfFetch('/admin/users/add-project', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           username: document.getElementById('projectUsername').value,
           projectName: document.getElementById('projectName').value
-        })
+        }
       });
       const data = await res.json();
       alert.className = 'alert ' + (data.success ? 'success' : 'error');
@@ -497,7 +614,7 @@
     }
 
     async function logout() {
-      await fetch('/auth/logout', { method: 'POST' });
+      await csrfFetch('/auth/logout', { method: 'POST' });
       window.location.href = '/login';
     }
 

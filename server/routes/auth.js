@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
+const { validateStrong } = require('../services/passwordPolicy');
+const audit = require('../services/auditLog');
 
 const USERS_FILE = path.join(__dirname, '../data/users.json');
 
@@ -29,7 +31,13 @@ router.post('/login', (req, res) => {
   const user = users.find(u => u.username === username);
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
+    audit.log('login.failed', { attempted: username }, req);
     return res.json({ success: false, message: 'Username atau password salah.' });
+  }
+
+  if (user.deletionPending) {
+    audit.log('login.blocked_deletion_pending', { username }, req);
+    return res.json({ success: false, message: 'Akun ini sedang ditangguhkan, hubungi admin.' });
   }
 
   req.session.regenerate((err) => {
@@ -41,18 +49,24 @@ router.post('/login', (req, res) => {
       role: user.role,
       displayName: user.displayName,
       port: user.port,
-      projects: user.projects || []
+      projects: user.projects || [],
+      mustChangePassword: !!user.mustChangePassword
     };
 
-    res.json({
-      success: true,
-      role: user.role,
-      redirect: user.role === 'admin' ? '/admin' : '/dashboard'
-    });
+    audit.log('login.success', { username, role: user.role, mustChange: !!user.mustChangePassword }, req);
+
+    let redirect;
+    if (user.mustChangePassword) redirect = '/change-password-required';
+    else if (user.role === 'admin') redirect = '/admin';
+    else redirect = '/dashboard';
+
+    res.json({ success: true, role: user.role, mustChangePassword: !!user.mustChangePassword, redirect });
   });
 });
 
 router.post('/logout', (req, res) => {
+  const username = req.session?.user?.username;
+  audit.log('logout', { username }, req);
   req.session.destroy(() => {
     res.clearCookie('devplatform.sid');
     res.json({ success: true });
@@ -67,20 +81,37 @@ router.post('/change-password', (req, res) => {
   const idx = users.findIndex(u => u.id === req.session.user.id);
 
   if (idx === -1) return res.json({ success: false, message: 'User tidak ditemukan.' });
-  if (!bcrypt.compareSync(oldPassword, users[idx].password)) {
+  if (!bcrypt.compareSync(oldPassword || '', users[idx].password)) {
+    audit.log('password.change_failed_wrong_old', { username: users[idx].username }, req);
     return res.json({ success: false, message: 'Password lama salah.' });
   }
-  if (!newPassword || newPassword.length < 8) {
-    return res.json({ success: false, message: 'Password baru minimal 8 karakter.' });
+
+  const policy = validateStrong(newPassword, users[idx].username);
+  if (!policy.ok) {
+    return res.json({ success: false, message: policy.message });
   }
 
-  users[idx].password = bcrypt.hashSync(newPassword, 10);
+  if (oldPassword === newPassword) {
+    return res.json({ success: false, message: 'Password baru tidak boleh sama dengan password lama.' });
+  }
+
+  users[idx].password = bcrypt.hashSync(newPassword, 12);
+  users[idx].mustChangePassword = false;
+  users[idx].passwordChangedAt = new Date().toISOString();
   saveUsers(users);
+
+  // Update session flag too
+  req.session.user.mustChangePassword = false;
+
+  audit.log('password.changed', { username: users[idx].username }, req);
   res.json({ success: true, message: 'Password berhasil diubah.' });
 });
 
 router.post('/change-email', (req, res) => {
   if (!req.session.user) return res.status(401).json({ success: false });
+  if (req.session.user.mustChangePassword) {
+    return res.status(423).json({ success: false, message: 'Ganti password dulu sebelum aksi lain.' });
+  }
 
   const { email, password } = req.body;
   if (!isValidEmail(email)) {
@@ -97,6 +128,7 @@ router.post('/change-email', (req, res) => {
 
   users[idx].email = email || '';
   saveUsers(users);
+  audit.log('email.changed', { username: users[idx].username, email }, req);
   res.json({ success: true, message: 'Email berhasil diubah.' });
 });
 
@@ -112,7 +144,8 @@ router.get('/me', (req, res) => {
       username: user.username,
       email: user.email || '',
       displayName: user.displayName,
-      role: user.role
+      role: user.role,
+      mustChangePassword: !!user.mustChangePassword
     }
   });
 });

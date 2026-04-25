@@ -158,9 +158,23 @@
       <p>Pilih project untuk buka VS Code, atau kelola database kamu di bawah.</p>
     </div>
 
-    <div class="section-title">Project Kamu</div>
+    <div class="section-title">
+      <span>Project Kamu</span>
+      <button onclick="openModal('createProjectModal')">+ Buat Project</button>
+    </div>
     <div class="grid-3" id="projectGrid">
       <div style="color:#8b949e; font-size:0.85rem;">Memuat project...</div>
+    </div>
+    <div id="trashSection" style="display:none;margin-top:14px;">
+      <details>
+        <summary style="color:#8b949e;font-size:.82rem;">🗑️ Project Terhapus (akan dibersihkan otomatis setelah 7 hari)</summary>
+        <div id="trashList" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;"></div>
+      </details>
+    </div>
+
+    <div class="section-title">Kuota Disk</div>
+    <div class="card" id="diskCard">
+      <div style="color:#8b949e;font-size:.85rem;">Memuat kuota...</div>
     </div>
 
     <div class="section-title">
@@ -196,6 +210,65 @@
       <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
         <button class="btn-outline" onclick="openModal('changeEmailModal')">✉️ Ubah Email</button>
         <button class="btn-outline" onclick="openModal('changePasswordModal')">🔑 Ganti Password</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Buat Project Baru -->
+  <div class="modal-overlay" id="createProjectModal">
+    <div class="modal">
+      <h3>📁 Buat Project Baru</h3>
+      <div class="form-group">
+        <label>Nama Project</label>
+        <input type="text" id="newProjectName" placeholder="contoh: belajar-react">
+        <div style="font-size:.72rem;color:#8b949e;margin-top:4px;">Hanya huruf, angka, dash, underscore. 1-40 karakter.</div>
+      </div>
+      <div class="alert" id="createProjectAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('createProjectModal')">Batal</button>
+        <button class="btn-primary" onclick="createProject()">Buat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Rename Project -->
+  <div class="modal-overlay" id="renameProjectModal">
+    <div class="modal">
+      <h3>✏️ Rename Project</h3>
+      <input type="hidden" id="renameOldName">
+      <div class="form-group">
+        <label>Nama Lama</label>
+        <input type="text" id="renameOldDisplay" disabled>
+      </div>
+      <div class="form-group">
+        <label>Nama Baru</label>
+        <input type="text" id="renameNewName" placeholder="nama-baru">
+      </div>
+      <div class="alert" id="renameProjectAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('renameProjectModal')">Batal</button>
+        <button class="btn-primary" onclick="renameProject()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Hapus Project (konfirmasi ketik nama) -->
+  <div class="modal-overlay" id="deleteProjectModal">
+    <div class="modal">
+      <h3 style="color:#f85149;">🗑️ Hapus Project</h3>
+      <input type="hidden" id="deleteProjectName">
+      <p style="font-size:.85rem;color:#8b949e;margin-bottom:14px;">
+        Project akan dipindah ke <strong style="color:#f0f6fc;">.trash/</strong> dan dihapus permanen setelah 7 hari.
+        Sebelum 7 hari kamu bisa pulihkan dari list "Project Terhapus".
+      </p>
+      <div class="form-group">
+        <label>Untuk konfirmasi, ketik <strong id="deleteProjectExpect" style="color:#f85149;">nama</strong> di bawah:</label>
+        <input type="text" id="deleteProjectConfirm" placeholder="ketik nama project persis">
+      </div>
+      <div class="alert" id="deleteProjectAlert"></div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal('deleteProjectModal')">Batal</button>
+        <button class="btn-primary" style="background:#da3633;" onclick="deleteProject()">Hapus</button>
       </div>
     </div>
   </div>
@@ -272,6 +345,26 @@
       return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    // CSRF helper — token diset oleh server di cookie 'devplatform.csrf' saat GET pertama
+    function getCsrfToken() {
+      const m = document.cookie.match(/(?:^|; )devplatform\.csrf=([^;]+)/);
+      return m ? m[1] : '';
+    }
+    async function csrfFetch(url, opts = {}) {
+      const headers = Object.assign({}, opts.headers || {}, { 'X-CSRF-Token': getCsrfToken() });
+      if (opts.body && typeof opts.body !== 'string') {
+        headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(opts.body);
+      }
+      return fetch(url, Object.assign({}, opts, { headers }));
+    }
+    function fmtBytes(kb) {
+      if (kb == null) return '–';
+      if (kb < 1024) return kb + ' KB';
+      if (kb < 1024 * 1024) return (kb / 1024).toFixed(1) + ' MB';
+      return (kb / 1024 / 1024).toFixed(2) + ' GB';
+    }
+
     function copyToClipboard(text, btn) {
       navigator.clipboard.writeText(text).then(() => {
         const orig = btn.textContent;
@@ -301,6 +394,7 @@
 
       loadProjects();
       loadDbInfo();
+      loadDiskUsage();
 
       // Update preview nama database saat user ketik
       document.getElementById('newDbName').addEventListener('input', updateDbPreview);
@@ -312,25 +406,142 @@
     }
 
     async function loadProjects() {
-      const res = await fetch(`/api/projects/${currentUser.username}`);
+      const res = await fetch('/api/my/projects');
       const data = await res.json();
       const grid = document.getElementById('projectGrid');
       grid.innerHTML = '';
 
-      data.projects.forEach(p => {
-        const a = document.createElement('a');
-        a.href = p.url; a.target = '_blank'; a.className = 'project-card';
-        a.innerHTML = `
-          <div class="project-icon">📁</div>
-          <div class="project-name">${escHtml(p.name)}</div>
-          <div class="project-meta">Klik untuk buka VS Code →</div>
+      const projects = data.projects || [];
+      projects.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'project-card';
+        card.style.cursor = 'default';
+        card.innerHTML = `
+          <a href="${escHtml(p.url)}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+            <div class="project-icon">📁</div>
+            <div class="project-name">${escHtml(p.name)}</div>
+            <div class="project-meta">${fmtBytes(p.sizeKb)} · klik buka VS Code →</div>
+          </a>
+          <div style="display:flex;gap:6px;margin-top:10px;border-top:1px solid #21262d;padding-top:10px;">
+            <button class="btn-outline" style="padding:4px 10px;font-size:.72rem;flex:1;" onclick="openRenameProject('${escHtml(p.name)}')">✏️ Rename</button>
+            <button class="btn-danger" style="flex:1;" onclick="openDeleteProject('${escHtml(p.name)}')">🗑️ Hapus</button>
+          </div>
         `;
-        grid.appendChild(a);
+        grid.appendChild(card);
       });
 
-      if (!data.projects.length) {
-        grid.innerHTML = '<div style="color:#8b949e;font-size:0.85rem;">Belum ada project. Minta admin untuk menambahkan.</div>';
+      if (!projects.length) {
+        grid.innerHTML = '<div style="color:#8b949e;font-size:0.85rem;grid-column:1/-1;">Belum ada project. Klik <b>+ Buat Project</b>.</div>';
       }
+
+      // Trash list
+      const trash = data.trash || [];
+      const trashSection = document.getElementById('trashSection');
+      const trashList = document.getElementById('trashList');
+      if (trash.length === 0) {
+        trashSection.style.display = 'none';
+      } else {
+        trashSection.style.display = 'block';
+        trashList.innerHTML = trash.map(t => `
+          <div style="background:#0d1117;border:1px solid #21262d;border-radius:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="color:#f0f6fc;font-size:.85rem;">${escHtml(t.originalName)}</div>
+              <div style="color:#8b949e;font-size:.7rem;">dihapus ${new Date(t.deletedAt).toLocaleString('id-ID')} · sisa ${t.daysLeft} hari</div>
+            </div>
+            <button class="btn-outline" style="padding:4px 10px;font-size:.72rem;" onclick="restoreProject('${escHtml(t.trashName)}')">♻️ Pulihkan</button>
+          </div>
+        `).join('');
+      }
+    }
+
+    async function createProject() {
+      const alert = document.getElementById('createProjectAlert');
+      const name = document.getElementById('newProjectName').value.trim();
+      const res = await csrfFetch('/api/my/projects', { method: 'POST', body: { name } });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) {
+        document.getElementById('newProjectName').value = '';
+        setTimeout(() => { closeModal('createProjectModal'); alert.style.display='none'; loadProjects(); loadDiskUsage(); }, 900);
+      }
+    }
+
+    function openRenameProject(name) {
+      document.getElementById('renameOldName').value = name;
+      document.getElementById('renameOldDisplay').value = name;
+      document.getElementById('renameNewName').value = '';
+      document.getElementById('renameProjectAlert').style.display='none';
+      openModal('renameProjectModal');
+    }
+    async function renameProject() {
+      const alert = document.getElementById('renameProjectAlert');
+      const oldName = document.getElementById('renameOldName').value;
+      const newName = document.getElementById('renameNewName').value.trim();
+      const res = await csrfFetch(`/api/my/projects/${encodeURIComponent(oldName)}`, {
+        method: 'PATCH', body: { name: newName }
+      });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) setTimeout(() => { closeModal('renameProjectModal'); loadProjects(); }, 900);
+    }
+
+    function openDeleteProject(name) {
+      document.getElementById('deleteProjectName').value = name;
+      document.getElementById('deleteProjectExpect').textContent = name;
+      document.getElementById('deleteProjectConfirm').value = '';
+      document.getElementById('deleteProjectAlert').style.display='none';
+      openModal('deleteProjectModal');
+    }
+    async function deleteProject() {
+      const alert = document.getElementById('deleteProjectAlert');
+      const name = document.getElementById('deleteProjectName').value;
+      const confirm = document.getElementById('deleteProjectConfirm').value;
+      if (confirm !== name) {
+        alert.className = 'alert error'; alert.textContent = 'Nama tidak cocok.'; alert.style.display='block';
+        return;
+      }
+      const res = await csrfFetch(`/api/my/projects/${encodeURIComponent(name)}?confirm=${encodeURIComponent(confirm)}`, { method: 'DELETE' });
+      const data = await res.json();
+      alert.className = 'alert ' + (data.success ? 'success' : 'error');
+      alert.textContent = data.message;
+      alert.style.display = 'block';
+      if (data.success) setTimeout(() => { closeModal('deleteProjectModal'); loadProjects(); loadDiskUsage(); }, 900);
+    }
+
+    async function restoreProject(trashName) {
+      const res = await csrfFetch(`/api/my/trash/${encodeURIComponent(trashName)}/restore`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) { loadProjects(); loadDiskUsage(); }
+      else window.alert('Gagal memulihkan: ' + data.message);
+    }
+
+    async function loadDiskUsage() {
+      const res = await fetch('/api/my/usage');
+      const card = document.getElementById('diskCard');
+      if (!res.ok) { card.innerHTML = '<div style="color:#8b949e;">Tidak bisa baca kuota.</div>'; return; }
+      const d = await res.json();
+      const usedKb = d.usedKb || 0;
+      const quotaKb = d.quotaKb || 0;
+      const perc = quotaKb > 0 ? Math.min(100, (usedKb / quotaKb) * 100) : 0;
+      const barColor = perc > 85 ? '#f85149' : perc > 60 ? '#f0883e' : '#3fb950';
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <span style="color:#f0f6fc;font-weight:600;">${fmtBytes(usedKb)}</span>
+          <span style="color:#8b949e;font-size:.82rem;">dari ${quotaKb ? fmtBytes(quotaKb) : 'tanpa kuota'}</span>
+        </div>
+        <div style="background:#21262d;height:8px;border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${perc}%;background:${barColor};transition:width .3s;"></div>
+        </div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.78rem;color:#8b949e;">
+          <div>📁 Project aktif: <span style="color:#f0f6fc;">${fmtBytes(d.projectsKb || 0)}</span></div>
+          <div>🗑️ Sampah: <span style="color:#f0f6fc;">${fmtBytes(d.trashKb || 0)}</span></div>
+        </div>
+        ${perc > 85 ? '<div style="margin-top:10px;color:#f85149;font-size:.78rem;">⚠️ Disk hampir penuh. Hapus project lama atau kosongkan sampah.</div>' : ''}
+      `;
     }
 
     async function loadDbInfo() {
@@ -476,10 +687,7 @@
         alert.className = 'alert error'; alert.textContent = 'Nama database wajib diisi.'; alert.style.display='block';
         return;
       }
-      const res = await fetch('/api/databases', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ type, name })
-      });
+      const res = await csrfFetch('/api/databases', { method: 'POST', body: { type, name } });
       const data = await res.json();
       alert.className = 'alert ' + (data.success ? 'success' : 'error');
       alert.textContent = data.message;
@@ -491,21 +699,26 @@
     }
 
     async function dropDatabase(type, name) {
-      if (!confirm(`Hapus database ${currentUser.username}_${name}? Data akan HILANG PERMANEN.`)) return;
-      const res = await fetch(`/api/databases/${type}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      const fullName = `${currentUser.username}_${name}`;
+      const typed = window.prompt(`Hapus database ${fullName}?\n\nUntuk konfirmasi, ketik nama database persis di bawah:`);
+      if (typed !== fullName) {
+        if (typed != null) window.alert('Nama tidak cocok. Database TIDAK dihapus.');
+        return;
+      }
+      const res = await csrfFetch(`/api/databases/${type}/${encodeURIComponent(name)}?confirm=${encodeURIComponent(fullName)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) loadDbInfo();
-      else alert('Gagal: ' + data.message);
+      else window.alert('Gagal: ' + data.message);
     }
 
     async function changePassword() {
       const alert = document.getElementById('pwAlert');
-      const res = await fetch('/auth/change-password', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
+      const res = await csrfFetch('/auth/change-password', {
+        method: 'POST',
+        body: {
           oldPassword: document.getElementById('oldPassword').value,
           newPassword: document.getElementById('newPassword').value
-        })
+        }
       });
       const data = await res.json();
       alert.className = 'alert ' + (data.success ? 'success' : 'error');
@@ -522,9 +735,9 @@
       const alert = document.getElementById('emailAlert');
       const newEmail = document.getElementById('newEmail').value.trim();
       const password = document.getElementById('emailPassword').value;
-      const res = await fetch('/auth/change-email', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ email: newEmail, password })
+      const res = await csrfFetch('/auth/change-email', {
+        method: 'POST',
+        body: { email: newEmail, password }
       });
       const data = await res.json();
       alert.className = 'alert ' + (data.success ? 'success' : 'error');
@@ -538,7 +751,7 @@
     }
 
     async function logout() {
-      await fetch('/auth/logout', { method: 'POST' });
+      await csrfFetch('/auth/logout', { method: 'POST' });
       window.location.href = '/login';
     }
 
