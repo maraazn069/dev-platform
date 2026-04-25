@@ -1,0 +1,17 @@
+FROM lscr.io/linuxserver/code-server:latest
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    unzip zip tar gzip bzip2 xz-utils \
+    wget curl jq tree \
+    vim nano less man-db \
+    git openssh-client rsync \
+    build-essential \
+    python3 python3-pip python3-venv \
+    sqlite3 \
+    ca-certificates \
+    iputils-ping net-tools dnsutils \
+  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && apt-get install -y nodejs \
+  && npm install -g yarn pnpm \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*

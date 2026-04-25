@@ -47,14 +47,12 @@ function safeDbName(username, dbName) {
 function provisionMysqlUser(username, password) {
   if (!isValidName(username)) throw new Error('invalid username');
   const escPw = password.replace(/'/g, "''");
-  // Note: the LIKE-style pattern grant `username\_%`.* uses backslash to escape `_`
-  // so it does NOT accidentally cover databases like `usernameXfoo`.
-  const sql = `
-    CREATE USER IF NOT EXISTS '${username}'@'%' IDENTIFIED BY '${escPw}';
-    ALTER USER '${username}'@'%' IDENTIFIED BY '${escPw}';
-    GRANT ALL PRIVILEGES ON \\\`${username}\\_%\\\`.* TO '${username}'@'%';
-    FLUSH PRIVILEGES;
-  `;
+  // SQL goes via stdin (no shell), so backticks are NOT escaped.
+  // Per-DB GRANT is done in createMysqlDatabase() — no broad pattern grant here
+  // (avoids '\' that confuses the mysql CLI client in batch mode).
+  const sql = `CREATE USER IF NOT EXISTS '${username}'@'%' IDENTIFIED BY '${escPw}';
+ALTER USER '${username}'@'%' IDENTIFIED BY '${escPw}';
+FLUSH PRIVILEGES;`;
   return mysqlQuery(sql);
 }
 
@@ -82,17 +80,15 @@ function provisionPgUser(username, password) {
 
 function createMysqlDatabase(username, dbName) {
   const fullName = safeDbName(username, dbName);
-  const sql = `
-    CREATE DATABASE IF NOT EXISTS \\\`${fullName}\\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    GRANT ALL PRIVILEGES ON \\\`${fullName}\\\`.* TO '${username}'@'%';
-    FLUSH PRIVILEGES;
-  `;
+  const sql = `CREATE DATABASE IF NOT EXISTS \`${fullName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON \`${fullName}\`.* TO '${username}'@'%';
+FLUSH PRIVILEGES;`;
   return mysqlQuery(sql);
 }
 
 function dropMysqlDatabase(username, dbName) {
   const fullName = safeDbName(username, dbName);
-  return mysqlQuery(`DROP DATABASE IF EXISTS \\\`${fullName}\\\`;`);
+  return mysqlQuery(`DROP DATABASE IF EXISTS \`${fullName}\`;`);
 }
 
 function createPgDatabase(username, dbName) {
@@ -112,6 +108,18 @@ function createCodeServerContainer(username, password) {
   }
   const userDir = `${USER_DATA_BASE}/${username}`;
   const network = dockerNetworkName();
+  const desiredImage = process.env.CODESERVER_IMAGE || 'devplatform-codeserver:latest';
+
+  // Ensure image exists locally; if not, fall back to upstream (and tag it so future runs work).
+  // This protects against partial upgrades where the install script wasn't re-run to build the
+  // custom image but userManager.js was updated to reference it.
+  const inspect = dockerCmd(['image', 'inspect', desiredImage], { timeout: 5000 });
+  if (!inspect.success) {
+    console.log(`[codeserver] image ${desiredImage} not found locally — pulling upstream as fallback`);
+    const upstream = 'lscr.io/linuxserver/code-server:latest';
+    dockerCmd(['pull', upstream], { timeout: 120000 });
+    dockerCmd(['tag', upstream, desiredImage], { timeout: 5000 });
+  }
 
   // Create user directories on host (we have /opt/devplatform/data mounted rw)
   try {
@@ -151,7 +159,7 @@ function createCodeServerContainer(username, password) {
     '-v', `${userDir}/projects:/config/projects`,
     '-v', `${userDir}/config:/config`,
     '--label', `devplatform.user=${username}`,
-    'lscr.io/linuxserver/code-server:latest'
+    process.env.CODESERVER_IMAGE || 'devplatform-codeserver:latest'
   ], { timeout: 60000 });
 }
 
@@ -242,12 +250,13 @@ function removeUser(username) {
 
   // 1) Enumerate ACTUAL databases on each server matching <username>_* and drop them.
   //    This catches databases created out-of-band that aren't tracked in users.json.
-  const myList = mysqlQuery(`SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE '${username}\\_%';`);
+  // Use ESCAPE '|' instead of '\' to avoid mysql CLI client interpreting '\' as a command.
+  const myList = mysqlQuery(`SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE '${username}|_%' ESCAPE '|';`);
   if (myList.success) {
     myList.output.split('\n').map(s => s.trim()).filter(Boolean).forEach(full => {
       // full is e.g. "alice_default". Verify prefix actually matches before dropping.
       if (full.startsWith(username + '_')) {
-        const r = mysqlQuery(`DROP DATABASE IF EXISTS \\\`${full}\\\`;`);
+        const r = mysqlQuery(`DROP DATABASE IF EXISTS \`${full}\`;`);
         if (!r.success) errors.push(`drop mysql ${full}: ${r.error}`);
       }
     });
@@ -255,7 +264,7 @@ function removeUser(username) {
     errors.push('list mysql dbs: ' + myList.error);
   }
 
-  const pgList = pgQuery(`SELECT datname FROM pg_database WHERE datname LIKE '${username}\\_%' ESCAPE '\\';`);
+  const pgList = pgQuery(`SELECT datname FROM pg_database WHERE datname LIKE '${username}|_%' ESCAPE '|';`);
   if (pgList.success) {
     pgList.output.split('\n').map(s => s.trim()).filter(Boolean).forEach(full => {
       if (full.startsWith(username + '_') && /^[a-z][a-z0-9_]*$/.test(full)) {

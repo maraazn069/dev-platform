@@ -507,8 +507,14 @@
         }
       });
       const data = await res.json();
+      // Filter out cosmetic warnings (mysql password-on-cli warning, etc) — only show real issues
+      const realWarnings = (data.warnings || []).filter(w =>
+        !/Using a password on the command line interface/i.test(w) &&
+        !/^\s*$/.test(w)
+      );
+      // Severity: API success=false ALWAYS = error, regardless of warning filter result.
       alertEl.className = 'alert ' + (data.success ? 'success' : 'error');
-      alertEl.textContent = data.message + (data.warnings && data.warnings.length ? ' Peringatan: ' + data.warnings.join('; ') : '');
+      alertEl.textContent = data.message + (realWarnings.length ? ' Detail: ' + realWarnings.join('; ') : '');
       alertEl.style.display = 'block';
       if (data.success && data.user) {
         credsEl.innerHTML = `

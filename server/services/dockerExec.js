@@ -69,11 +69,23 @@ function dockerCmd(args, opts = {}) {
  */
 function mysqlQuery(sql) {
   const rootPw = process.env.MYSQL_ROOT_PASSWORD || '';
-  return dockerExecStdin(
+  // MYSQL_PWD env avoids the cosmetic "[Warning] Using a password on the command line interface
+  // can be insecure" line that polluted user-facing alerts. Equivalent functionality.
+  const result = dockerExecStdin(
     'devplatform-mysql',
-    ['mysql', '-uroot', `-p${rootPw}`, '-N', '-B'],
+    ['env', `MYSQL_PWD=${rootPw}`, 'mysql', '-uroot', '-N', '-B'],
     sql
   );
+  // Strip residual cosmetic mysql warnings if any
+  if (result.error) {
+    result.error = result.error
+      .split('\n')
+      .filter(l => !/\[Warning\] Using a password on the command line/i.test(l))
+      .join('\n')
+      .trim();
+    if (!result.error) result.success = result.success || true;
+  }
+  return result;
 }
 
 /**

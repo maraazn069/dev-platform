@@ -611,13 +611,25 @@ sudo docker restart nginx-proxy # reload nginx
 
 ## 9️⃣ Akun Admin Tunggal (Unified Login)
 
-Mulai dari versi sekarang, **1 akun admin = 1 username + 1 email + 1 password** untuk SEMUA admin login:
-Portal, File Browser, dan pgAdmin pakai akun yang sama.
+Mulai dari versi sekarang, **1 akun admin = 1 username + 1 email + 1 password** untuk SEMUA login admin:
+Portal, File Browser, pgAdmin, **phpMyAdmin (root)**, **PostgreSQL remote (postgres)**, dan **MySQL remote (root)**
+semuanya pakai password yang sama.
 
 ### Setup Pertama
 - Installer nanya: username (default `admin`), email (default `admin@<domain>`), password (min 10 char, ketik manual).
+- Password ini di-set ke: `ADMIN_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `PGADMIN_PASSWORD` (semua sama).
 - Otomatis di-bootstrap ke File Browser & pgAdmin di akhir install.
-- Tersimpan di `.env`: `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `PGADMIN_EMAIL`, `PGADMIN_PASSWORD`.
+- Tersimpan di `.env`.
+
+### Tabel Login Cepat
+| Service | URL | Username | Password |
+|---|---|---|---|
+| Portal | `https://dev.netprem.org` | `admin` | password admin |
+| File Browser | `https://files.dev.netprem.org` | `admin` | password admin |
+| pgAdmin | `https://pgadmin.dev.netprem.org` | `admin@dev.netprem.org` | password admin |
+| phpMyAdmin | `https://mysql.dev.netprem.org` | `root` | password admin |
+| PostgreSQL remote | `20.200.209.228:5432` | `postgres` | password admin |
+| MySQL remote | `20.200.209.228:3306` | `root` | password admin |
 
 ### Ganti Password (Auto-Sync)
 1. Login ke Portal `https://dev.netprem.org/dashboard`
@@ -651,10 +663,10 @@ sudo docker exec devplatform-pgadmin /venv/bin/python /pgadmin4/setup.py update-
   --user admin@dev.netprem.org --password "PasswordBaru12345"
 ```
 
-### Service Lain (Tidak Termasuk Unified)
-- **phpMyAdmin** → login pakai user MySQL biasa (`root` + `MYSQL_ROOT_PASSWORD` dari `.env`)
+### Service Lain
 - **Portainer** → setup admin sendiri saat buka URL pertama (`http://IP:9000`)
-- **User VS Code** → tambah via `sudo bash scripts/add-user.sh namauser password port` — user diminta ganti password saat login pertama. Akses VS Code: `https://namauser.dev.netprem.org`
+- **User VS Code** → tambah via Admin Panel atau `sudo bash scripts/add-user.sh namauser password port` — user diminta ganti password saat login pertama. Akses VS Code: `https://namauser.dev.netprem.org`
+- Container code-server sekarang sudah terbundle: **unzip, zip, wget, vim, nano, git, python3, nodejs 20, npm, yarn, pnpm, build-essential, sqlite3** — siap pakai tanpa sudo.
 
 ---
 

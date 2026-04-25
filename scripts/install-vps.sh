@@ -54,18 +54,13 @@ read -p "$(echo -e ${YELLOW})Timezone (Enter untuk Asia/Jakarta): $(echo -e ${NC
 TZ="${TZ_INPUT:-Asia/Jakarta}"
 
 echo ""
-echo -e "${BOLD}Konfigurasi Database${NC}"
-echo ""
-read -p "$(echo -e ${YELLOW})Password PostgreSQL (Enter untuk auto-generate): $(echo -e ${NC})" PG_PASS
-if [ -z "$PG_PASS" ]; then PG_PASS=$(openssl rand -base64 20); fi
-
-read -p "$(echo -e ${YELLOW})Password MySQL root (Enter untuk auto-generate): $(echo -e ${NC})" MYSQL_ROOT_PASS
-if [ -z "$MYSQL_ROOT_PASS" ]; then MYSQL_ROOT_PASS=$(openssl rand -base64 20); fi
-
-echo ""
-echo -e "${BOLD}═══ Akun Admin Tunggal ═══${NC}"
-echo -e "${YELLOW}Akun ini dipakai untuk SEMUA admin login: Portal, File Browser, dan pgAdmin."
-echo -e "Pas kakak ganti password di Portal, otomatis ke-sync ke File Browser & pgAdmin.${NC}"
+echo -e "${BOLD}═══ Akun Admin Tunggal (untuk SEMUA login) ═══${NC}"
+echo -e "${YELLOW}1 password ini dipakai untuk login ke:"
+echo -e "  • Portal (https://$DOMAIN)"
+echo -e "  • File Browser (https://files.$DOMAIN)"
+echo -e "  • pgAdmin (https://pgadmin.$DOMAIN)"
+echo -e "  • phpMyAdmin (https://mysql.$DOMAIN) — login 'root'"
+echo -e "  • PostgreSQL & MySQL remote (DBeaver/Workbench) — user 'postgres' & 'root'${NC}"
 echo ""
 read -p "$(echo -e ${YELLOW})Username admin (Enter untuk 'admin'): $(echo -e ${NC})" ADMIN_USERNAME
 if [ -z "$ADMIN_USERNAME" ]; then ADMIN_USERNAME="admin"; fi
@@ -99,10 +94,12 @@ while true; do
   break
 done
 
-# pgAdmin pakai kredensial admin yg sama (unified login)
+# UNIFIED: semua password DB (PG, MySQL root, pgAdmin) pakai password admin yg sama
+PG_PASS="$ADMIN_PASSWORD"
+MYSQL_ROOT_PASS="$ADMIN_PASSWORD"
 PGADMIN_EMAIL="$ADMIN_EMAIL"
 PGADMIN_PASSWORD="$ADMIN_PASSWORD"
-echo -e "${GREEN}✓ pgAdmin & File Browser akan pakai akun admin yang sama${NC}"
+echo -e "${GREEN}✓ Semua login admin (Portal, FB, pgAdmin, phpMyAdmin, PostgreSQL, MySQL root) pakai 1 password${NC}"
 
 echo ""
 echo -e "${BOLD}Akses Remote Database${NC}"
@@ -414,6 +411,19 @@ if [ -f server/data/users.json ]; then
   rm -f server/data/users.json
 fi
 
+# Build custom code-server image dengan tools lengkap (unzip, git, python3, nodejs, dll)
+echo ""
+echo -e "${CYAN}Build custom image code-server (unzip, git, python3, nodejs, dll)...${NC}"
+if [ -f Dockerfile.codeserver ]; then
+  docker build -t devplatform-codeserver:latest -f Dockerfile.codeserver . || {
+    echo -e "${YELLOW}⚠ Build custom image gagal — fallback ke image bawaan tanpa unzip${NC}"
+    docker tag lscr.io/linuxserver/code-server:latest devplatform-codeserver:latest 2>/dev/null || \
+      docker pull lscr.io/linuxserver/code-server:latest && \
+      docker tag lscr.io/linuxserver/code-server:latest devplatform-codeserver:latest
+  }
+  echo -e "${GREEN}✓ Image devplatform-codeserver:latest siap${NC}"
+fi
+
 # Build & start semua service
 echo ""
 echo -e "${CYAN}Menjalankan semua service...${NC}"
@@ -454,23 +464,22 @@ echo -e "${BOLD}Akses Platform:${NC}"
 echo -e "  Via domain  : ${CYAN}http://$DOMAIN${NC}"
 echo -e "  Via IP      : ${CYAN}http://$SERVER_IP${NC} (redirect ke domain)"
 echo ""
-echo -e "${BOLD}Akun Admin Tunggal (untuk Portal, File Browser, pgAdmin):${NC}"
+echo -e "${BOLD}═══ 1 PASSWORD UNTUK SEMUA LOGIN ADMIN ═══${NC}"
 echo -e "  Username : ${YELLOW}$ADMIN_USERNAME${NC}"
 echo -e "  Email    : ${YELLOW}$ADMIN_EMAIL${NC}"
-echo -e "  Password : ${YELLOW}(yang kakak set saat install)${NC}"
-echo -e "  ${GREEN}Pas ganti password di Portal → otomatis ke-sync ke File Browser & pgAdmin${NC}"
-echo -e "  ${YELLOW}Tambah user baru: sudo bash scripts/add-user.sh namauser password port${NC}"
+echo -e "  Password : ${YELLOW}(yang kakak ketik saat install tadi)${NC}"
 echo ""
-echo -e "${BOLD}Kredensial Database (simpan baik-baik!):${NC}"
-echo -e "  PostgreSQL password : ${YELLOW}$PG_PASS${NC}"
-echo -e "  MySQL root password : ${YELLOW}$MYSQL_ROOT_PASS${NC}"
+echo -e "${BOLD}Login pakai password admin di atas:${NC}"
+echo -e "  Portal           : ${CYAN}https://$DOMAIN${NC}            user: ${YELLOW}$ADMIN_USERNAME${NC}"
+echo -e "  File Browser     : ${CYAN}https://files.$DOMAIN${NC}      user: ${YELLOW}$ADMIN_USERNAME${NC}"
+echo -e "  pgAdmin          : ${CYAN}https://pgadmin.$DOMAIN${NC}    user: ${YELLOW}$ADMIN_EMAIL${NC}"
+echo -e "  phpMyAdmin       : ${CYAN}https://mysql.$DOMAIN${NC}      user: ${YELLOW}root${NC}"
+echo -e "  PostgreSQL remote: ${YELLOW}$SERVER_IP:5432${NC}              user: ${YELLOW}postgres${NC}"
+echo -e "  MySQL remote     : ${YELLOW}$SERVER_IP:3306${NC}              user: ${YELLOW}root${NC}"
 echo ""
-echo -e "${BOLD}Web UI Database & File:${NC}"
-echo -e "  phpMyAdmin (MySQL)   : ${CYAN}https://mysql.$DOMAIN${NC}  (root / $MYSQL_ROOT_PASS)"
-echo -e "  pgAdmin (PostgreSQL) : ${CYAN}https://pgadmin.$DOMAIN${NC}"
-echo -e "    Login            : ${YELLOW}$ADMIN_EMAIL${NC} + password admin di atas"
-echo -e "  File Browser         : ${CYAN}https://files.$DOMAIN${NC}"
-echo -e "    Login            : ${YELLOW}$ADMIN_USERNAME${NC} + password admin di atas"
+echo -e "  ${GREEN}✓ Ganti password admin di Portal → otomatis ke-sync ke File Browser & pgAdmin${NC}"
+echo -e "  ${YELLOW}⚠ MySQL root & PostgreSQL password TIDAK ikut ke-sync (DB password = constant);${NC}"
+echo -e "  ${YELLOW}  set ulang manual lewat 'docker exec' kalau mau ganti.${NC}"
 echo ""
 echo -e "${YELLOW}Langkah selanjutnya (WAJIB):${NC}"
 echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"

@@ -2,6 +2,12 @@
 
 Platform coding mandiri berbasis Docker untuk 1-10 user belajar, mirip Replit/VSCode.dev.
 
+## Last Build Notes (2026-04-25)
+- **Unified login**: install-vps.sh sekarang set `ADMIN_PASSWORD = MYSQL_ROOT_PASSWORD = POSTGRES_PASSWORD = PGADMIN_PASSWORD` (1 password untuk Portal/FB/pgAdmin/phpMyAdmin/PG-remote/MySQL-remote).
+- **Custom code-server image** (`Dockerfile.codeserver`): bundle unzip, zip, wget, vim, nano, git, python3, nodejs 20, npm, yarn, pnpm, build-essential, sqlite3. Build otomatis saat install (`docker build -t devplatform-codeserver:latest`). `userManager.js` & `add-user.sh` pakai image lokal ini.
+- **MySQL backslash bug fixed**: `dockerExec.mysqlQuery` pakai `MYSQL_PWD` env (hilang warning password-on-cli) + filter sisa warning. SQL di `userManager.js` pakai backtick polos (no `\\\``) karena via stdin (no shell). LIKE pattern pakai `ESCAPE '|'` (bukan `\`). Admin alert juga filter warning kosmetik di UI.
+- **Files touched**: `Dockerfile.codeserver` (new), `scripts/install-vps.sh`, `server/services/userManager.js`, `server/services/dockerExec.js`, `public/admin.html`, `scripts/add-user.sh`, `PERINTAH.md`.
+
 ## Stack
 - **Portal**: Node.js 20 + Express (login, dashboard, admin panel)
 - **VS Code**: code-server (linuxserver/code-server) per user via Docker

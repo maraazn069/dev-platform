@@ -74,7 +74,7 @@ else
     -v "$USER_DIR/projects:/config/projects" \
     -v "$USER_DIR/config:/config" \
     --label "devplatform.user=$USERNAME" \
-    lscr.io/linuxserver/code-server:latest
+    "${CODESERVER_IMAGE:-devplatform-codeserver:latest}"
 
   echo -e "${GREEN}Container code-server untuk $USERNAME berhasil dibuat.${NC}"
 fi
