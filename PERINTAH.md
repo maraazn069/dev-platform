@@ -201,6 +201,53 @@ Setelah reinstall:
 
 ---
 
+### 🆘 Opsi B-FIX — Recovery dari Error "Bad source address" / ".env tidak ditemukan"
+Kalau `install-vps.sh` gagal di tengah dengan pesan **`ERROR: Bad source address`**
+lalu lanjut **`File .env tidak ditemukan`**, itu karena IP yang kakak input untuk
+DB whitelist ada karakter aneh (biasanya `\r` dari paste Windows clipboard, atau
+spasi/karakter tersembunyi). Script keluar sebelum sempat bikin `.env`.
+
+**Cara atasi (script terbaru sudah auto-handle, tapi kalau masih kena):**
+```bash
+cd ~/dev-platform
+
+# 1. Pull versi script terbaru (sudah ada validasi IP + skip yang invalid)
+git pull origin main
+
+# 2. Reset firewall yang setengah jadi
+sudo ufw --force reset
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+
+# 3. Hapus file setengah jadi (kalau ada)
+sudo rm -f .env nginx/nginx.conf
+
+# 4. Re-run installer — saat ditanya "IP yang boleh konek DB", PILIH SALAH SATU:
+#    - Tekan Enter (kosong) saja → bisa edit .env nanti tambah whitelist manual
+#    - Ketik IP MANUAL (jangan paste dari Windows!), contoh: 203.0.113.45
+#    - Multiple IP: 203.0.113.45,1.2.3.4 (pisahkan koma, TANPA spasi)
+sudo bash scripts/install-vps.sh
+
+# 5. Lanjut HTTPS seperti biasa
+sudo bash scripts/setup-https.sh
+```
+
+**Tips paste IP dari Windows:**
+- Jangan langsung Ctrl+V dari Notepad/Word (sering bawa `\r\n`)
+- Pakai PowerShell/PuTTY paste lalu hapus karakter di akhir (Backspace 1x sebelum Enter)
+- Atau ketik manual paling aman
+
+**Cek .env setelah install berhasil:**
+```bash
+cat .env | grep -E "DOMAIN|DB_REMOTE|MYSQL_ROOT|POSTGRES"
+```
+
+---
+
 ### 🔧 Opsi C — Update + Tambah Service Baru (data AMAN)
 Pakai ini kalau ada service baru di `docker-compose.yml` (mis. filebrowser, pgadmin, dll baru ditambah).
 ```bash

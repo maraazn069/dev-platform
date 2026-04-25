@@ -175,13 +175,28 @@ ufw allow 443/tcp > /dev/null
 
 if [ -n "$DB_REMOTE_IPS" ]; then
   # Whitelist HANYA IP yang user daftarkan untuk port DB
-  IFS=', ' read -ra IP_ARR <<< "$DB_REMOTE_IPS"
-  for IP in "${IP_ARR[@]}"; do
+  # Bersihkan \r (Windows paste), spasi, tab, newline dari input
+  DB_REMOTE_IPS_CLEAN=$(echo "$DB_REMOTE_IPS" | tr -d '\r\t' | tr -s ' ')
+  IFS=', ' read -ra IP_ARR <<< "$DB_REMOTE_IPS_CLEAN"
+  for IP_RAW in "${IP_ARR[@]}"; do
+    # Trim whitespace + carriage return per item
+    IP=$(echo "$IP_RAW" | xargs | tr -d '\r')
     [ -z "$IP" ] && continue
-    ufw allow from "$IP" to any port 3306 proto tcp > /dev/null
-    ufw allow from "$IP" to any port 5432 proto tcp > /dev/null
-    echo -e "${GREEN}✓ Whitelist DB akses: $IP${NC}"
+    # Validasi format IPv4 (dengan/tanpa CIDR)
+    if [[ ! "$IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$ ]]; then
+      echo -e "${YELLOW}⚠ Skip IP tidak valid: '$IP' (harus format 1.2.3.4 atau 1.2.3.0/24)${NC}"
+      continue
+    fi
+    # Pakai || true supaya 1 IP gagal tidak crash semua install
+    if ufw allow from "$IP" to any port 3306 proto tcp > /dev/null 2>&1 \
+       && ufw allow from "$IP" to any port 5432 proto tcp > /dev/null 2>&1; then
+      echo -e "${GREEN}✓ Whitelist DB akses: $IP${NC}"
+    else
+      echo -e "${YELLOW}⚠ Gagal whitelist '$IP' (cek format), lanjutkan...${NC}"
+    fi
   done
+  # Update var supaya .env nyimpan versi bersih
+  DB_REMOTE_IPS="$DB_REMOTE_IPS_CLEAN"
   echo -e "${GREEN}✓ Firewall aktif (22, 80, 443) + DB hanya untuk IP whitelist${NC}"
 else
   echo -e "${YELLOW}⚠ Tidak ada IP whitelist DB. Port 3306/5432 TIDAK terbuka dari internet.${NC}"
