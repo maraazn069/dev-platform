@@ -169,7 +169,10 @@ services:
       - PGID=0
       - TZ=${TZ:-Asia/Jakarta}
     volumes:
-      - /opt/devplatform/data:/srv
+      # Mount /opt/devplatform supaya admin bisa lihat: data user, nginx config,
+      # scripts, .env (CARE: filebrowser admin bisa modif). Logs read-only mount.
+      - /opt/devplatform:/srv/devplatform
+      - /var/log:/srv/logs:ro
       - filebrowser_db:/database
       - filebrowser_config:/config
     networks:
