@@ -12,16 +12,12 @@ const USERS_FILE = path.join(__dirname, '../data/users.json');
 
 function requireAuth(req, res, next) {
   if (!req.session || !req.session.user) return res.status(401).json({ error: 'Unauthorized' });
-  if (req.session.user.mustChangePassword) {
-    return res.status(423).json({ error: 'must_change_password', message: 'Ganti password dulu.' });
-  }
   next();
 }
 
 function requireAdmin(req, res, next) {
   if (!req.session || !req.session.user) return res.status(401).json({ error: 'Unauthorized' });
   if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  if (req.session.user.mustChangePassword) return res.status(423).json({ error: 'must_change_password' });
   next();
 }
 

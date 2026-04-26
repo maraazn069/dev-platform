@@ -53,8 +53,7 @@ router.post('/login', (req, res) => {
     audit.log('login.success', { username, role: user.role, mustChange: !!user.mustChangePassword }, req);
 
     let redirect;
-    if (user.mustChangePassword) redirect = '/change-password-required';
-    else if (user.role === 'admin') redirect = '/admin';
+    if (user.role === 'admin') redirect = '/admin';
     else redirect = '/dashboard';
 
     res.json({ success: true, role: user.role, mustChangePassword: !!user.mustChangePassword, redirect });
@@ -105,6 +104,7 @@ router.post('/change-password', async (req, res) => {
     req.session.user.mustChangePassword = false;
     audit.log('password.changed', { username: result.user.username }, req);
 
+    let csSyncResult = null;
     if (result.user.role === 'admin') {
       const { syncAdminPassword } = require('../services/credentialSync');
       syncAdminPassword({
@@ -119,14 +119,29 @@ router.post('/change-password', async (req, res) => {
           env: r.env?.ok ? 'ok' : (r.env?.message || 'failed')
         }, req);
       }).catch((e) => audit.log('password.sync_admin_error', { error: e.message }, req));
+    } else {
+      // User non-admin: sync password VS Code (code-server) supaya login VS Code = login portal.
+      // Foreground call (~2-5 detik) supaya kalau gagal user dapat warning langsung.
+      try {
+        csSyncResult = userManager.updateCodeServerPassword(result.user.username, newPassword);
+      } catch (e) {
+        csSyncResult = { success: false, error: e.message };
+      }
+      audit.log('password.sync_codeserver', {
+        username: result.user.username,
+        status: csSyncResult.success ? 'ok' : (csSyncResult.error || 'failed')
+      }, req);
     }
 
-    res.json({
-      success: true,
-      message: result.user.role === 'admin'
-        ? 'Password berhasil diubah. File Browser & pgAdmin sedang di-sync di latar belakang (cek audit log).'
-        : 'Password berhasil diubah.'
-    });
+    let userMsg;
+    if (result.user.role === 'admin') {
+      userMsg = 'Password berhasil diubah. File Browser & pgAdmin sedang di-sync di latar belakang (cek audit log).';
+    } else if (csSyncResult && csSyncResult.success) {
+      userMsg = 'Password berhasil diubah. VS Code juga ke-update — login VS Code pakai password baru.';
+    } else {
+      userMsg = `Password portal berhasil diubah, tapi sync VS Code GAGAL (${csSyncResult?.error || 'unknown'}). Hubungi admin untuk restart container.`;
+    }
+    res.json({ success: true, message: userMsg, codeServerSync: csSyncResult });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Gagal ubah password: ' + e.message });
   }
@@ -134,9 +149,6 @@ router.post('/change-password', async (req, res) => {
 
 router.post('/change-email', async (req, res) => {
   if (!req.session.user) return res.status(401).json({ success: false });
-  if (req.session.user.mustChangePassword) {
-    return res.status(423).json({ success: false, message: 'Ganti password dulu sebelum aksi lain.' });
-  }
 
   const { email, password } = req.body;
   if (!isValidEmail(email)) {

@@ -8,7 +8,7 @@
     "displayName": "Administrator",
     "port": null,
     "projects": [],
-    "mustChangePassword": true,
+    "mustChangePassword": false,
     "createdAt": "2026-04-25T20:58:59.212Z"
   }
 ]

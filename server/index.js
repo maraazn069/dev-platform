@@ -50,7 +50,7 @@ if (!fs.existsSync(USERS_FILE) || !_hasAdmin) {
     projects: [],
     // Kalau admin set password manual via .env → tidak perlu force-change
     // Kalau pakai default 'admin123' → wajib ganti
-    mustChangePassword: !adminFromEnv,
+    mustChangePassword: false,
     passwordChangedAt: adminFromEnv ? new Date().toISOString() : undefined,
     createdAt: new Date().toISOString()
   };
@@ -68,20 +68,21 @@ if (!fs.existsSync(USERS_FILE) || !_hasAdmin) {
   }
 }
 
-// Migration: untuk install lama yang belum punya mustChangePassword. Kalau user
-// belum pernah ganti password (passwordChangedAt absent), set flag-nya.
+// Migration: clear mustChangePassword flag untuk semua user existing.
+// Force-change-password sudah dihapus dari flow login (user bisa ganti pw kapan saja
+// secara sukarela via /change-password, bukan dipaksa di first login).
 try {
   const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
   let changed = false;
   for (const u of users) {
-    if (u.mustChangePassword === undefined && !u.passwordChangedAt) {
-      u.mustChangePassword = true;
+    if (u.mustChangePassword === true) {
+      u.mustChangePassword = false;
       changed = true;
     }
   }
   if (changed) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-    console.log('[migration] mustChangePassword flag ditambahkan ke user lama yang belum ganti password.');
+    console.log('[migration] mustChangePassword=true di-clear untuk user lama (force-change-password feature dihapus).');
   }
 } catch (e) {
   console.warn('[migration] gagal cek users.json:', e.message);
@@ -161,7 +162,22 @@ const apiLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Limiter khusus untuk endpoint sensitif (change password) — cegah brute force
+// "tebak password lama" dari session yang sudah login.
+const changePwLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 6,
+  message: { success: false, message: 'Terlalu banyak percobaan ubah password. Coba lagi 15 menit.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res, next, options) => {
+    audit.log('change_password.rate_limited', { username: req.session?.user?.username }, req);
+    res.status(options.statusCode).json(options.message);
+  }
+});
+
 app.use('/auth/login', loginLimiter);
+app.use('/auth/change-password', changePwLimiter);
 app.use('/api', apiLimiter);
 
 // ----- CSRF protection -----
@@ -190,7 +206,6 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   if (req.session && req.session.user) {
-    if (req.session.user.mustChangePassword) return res.redirect('/change-password-required');
     if (req.session.user.role === 'admin') return res.redirect('/admin');
     return res.redirect('/dashboard');
   }
@@ -201,9 +216,11 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
+// Backward-compat: kalau ada bookmark/cookie lama yang redirect ke route ini,
+// langsung lempar ke dashboard (force-change-password sudah dihapus).
 app.get('/change-password-required', (req, res) => {
   if (!req.session || !req.session.user) return res.redirect('/login');
-  res.sendFile(path.join(__dirname, '../public/change-password-required.html'));
+  return res.redirect(req.session.user.role === 'admin' ? '/admin' : '/dashboard');
 });
 
 // 404 JSON for /api/*, fallback redirect for others

@@ -14,7 +14,6 @@ const USERS_FILE = path.join(__dirname, '../data/users.json');
 
 function requireAdmin(req, res, next) {
   if (!req.session || !req.session.user) return res.redirect('/login');
-  if (req.session.user.mustChangePassword) return res.redirect('/change-password-required');
   if (req.session.user.role !== 'admin') return res.redirect('/dashboard');
   next();
 }
@@ -22,7 +21,6 @@ function requireAdmin(req, res, next) {
 function requireAdminApi(req, res, next) {
   if (!req.session || !req.session.user) return res.status(401).json({ error: 'Unauthorized' });
   if (req.session.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  if (req.session.user.mustChangePassword) return res.status(423).json({ error: 'must_change_password' });
   next();
 }
 
@@ -88,7 +86,7 @@ router.post('/users/remove', requireAdminApi, async (req, res) => {
 });
 
 router.post('/users/reset-password', requireAdminApi, async (req, res) => {
-  const { username, newPassword, forceChange } = req.body;
+  const { username, newPassword } = req.body;
   const policy = validateStrong(newPassword, username);
   if (!policy.ok) return res.json({ success: false, message: policy.message });
 
@@ -97,13 +95,30 @@ router.post('/users/reset-password', requireAdminApi, async (req, res) => {
       const idx = users.findIndex(u => u.username === username);
       if (idx === -1) return { ok: false, message: 'User tidak ditemukan.' };
       users[idx].password = bcrypt.hashSync(newPassword, 12);
-      if (forceChange !== false) users[idx].mustChangePassword = true;
+      users[idx].mustChangePassword = false;
       users[idx].passwordChangedAt = new Date().toISOString();
       return { ok: true };
     });
     if (!result.ok) return res.json({ success: false, message: result.message });
-    audit.log('user.password_reset', { target: username, forceChange: forceChange !== false }, req);
-    res.json({ success: true, message: `Password '${username}' direset. User wajib ganti saat login.` });
+
+    // Sync password VS Code (code-server) supaya login VS Code juga pakai password baru.
+    let csSync = { success: false, error: 'not attempted' };
+    try {
+      csSync = userManager.updateCodeServerPassword(username, newPassword);
+    } catch (e) {
+      csSync = { success: false, error: e.message };
+    }
+
+    audit.log('user.password_reset', {
+      target: username,
+      codeserver_sync: csSync.success ? 'ok' : (csSync.error || 'failed')
+    }, req);
+
+    const baseMsg = `Password '${username}' direset.`;
+    const csMsg = csSync.success
+      ? ' VS Code login juga di-update.'
+      : ` ⚠ Password VS Code GAGAL di-sync (${csSync.error || 'unknown'}). Restart container manual.`;
+    res.json({ success: true, message: baseMsg + csMsg });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Reset password gagal: ' + e.message });
   }

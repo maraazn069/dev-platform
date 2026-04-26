@@ -190,6 +190,37 @@ function removeCodeServerContainer(username) {
 }
 
 /**
+ * Sync password VS Code (code-server) ke password baru.
+ * Tulis config.yaml dengan password baru lalu restart container — lebih cepat
+ * daripada recreate container (preserve workspace state, terminal, dll).
+ */
+function updateCodeServerPassword(username, newPassword) {
+  if (!isValidName(username)) {
+    return { success: false, error: 'Username tidak valid' };
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 1) {
+    return { success: false, error: 'Password kosong' };
+  }
+  try {
+    const userDir = getUserDir(username);
+    const cfgDir = path.join(userDir, 'config', '.config', 'code-server');
+    fs.mkdirSync(cfgDir, { recursive: true });
+    const cfgPath = path.join(cfgDir, 'config.yaml');
+    // Plaintext password file → hanya readable oleh root container (volume bind mount).
+    // Code-server akan baca dari sini saat startup. Override env PASSWORD sebelumnya.
+    const yamlContent = `bind-addr: 0.0.0.0:8443\nauth: password\npassword: ${newPassword}\ncert: false\n`;
+    fs.writeFileSync(cfgPath, yamlContent, { mode: 0o600 });
+
+    // Restart container supaya code-server pickup password baru
+    const r = dockerCmd(['restart', `codeserver-${username}`], { timeout: 30000 });
+    if (!r.success) return { success: false, error: 'restart gagal: ' + r.error };
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+/**
  * Provision full user: code-server container, MySQL user+default DB, PG user+default DB,
  * nginx subdomain entry. Generates passwords and saves to users.json.
  */
@@ -277,7 +308,8 @@ function provisionUser({ username, password, displayName, email }) {
     mysqlPassword,
     pgPassword,
     pgAdminEmail,
-    mustChangePassword: true,
+    mustChangePassword: false,
+    passwordChangedAt: new Date().toISOString(),
     createdAt: new Date().toISOString()
   };
   users.push(newUser);
@@ -625,6 +657,7 @@ module.exports = {
   dropDatabase: (username, type, dbName) => withUserLock(() => dropDatabase(username, type, dbName)),
   repairUserCredentials: (username) => withUserLock(() => repairUserCredentials(username)),
   recreateContainer: (username) => withUserLock(() => recreateContainer(username)),
+  updateCodeServerPassword,
   getCredentials,
   safeDbName,
   isValidName,
