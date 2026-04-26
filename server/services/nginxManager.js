@@ -98,7 +98,7 @@ function ensureUserConfig(username, opts = {}) {
     server {
         listen 443 ssl;
         http2 on;
-        server_name ~^(?<project>[a-z0-9][a-z0-9]*)(?:-(?<port>[3-9][0-9]{3}))?\\.${username}\\.${domain.replace(/\./g, '\\.')}$;
+        server_name "~^(?<project>[a-z0-9][a-z0-9]*)(?:-(?<port>[3-9][0-9]{3}))?\\.${username}\\.${domain.replace(/\./g, '\\.')}$";
 
         ssl_certificate ${perUserCert};
         ssl_certificate_key ${perUserCert.replace('fullchain', 'privkey')};
