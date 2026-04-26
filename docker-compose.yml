@@ -169,10 +169,11 @@ services:
       - PGID=0
       - TZ=${TZ:-Asia/Jakarta}
     volumes:
-      # Mount /opt/devplatform supaya admin bisa lihat: data user, nginx config,
-      # scripts, .env (CARE: filebrowser admin bisa modif). Logs read-only mount.
+      # /opt/devplatform = READ-WRITE (config, data user, nginx, scripts, .env).
+      # /  (root)        = READ-ONLY ke /srv/host supaya admin bisa browse seluruh
+      #                    filesystem VPS (/etc, /var, /home, dll) tanpa risiko ngerusak.
       - /opt/devplatform:/srv/devplatform
-      - /var/log:/srv/logs:ro
+      - /:/srv/host:ro
       - filebrowser_db:/database
       - filebrowser_config:/config
     networks:
