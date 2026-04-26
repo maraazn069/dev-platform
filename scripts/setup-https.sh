@@ -26,6 +26,20 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# === FAILSAFE: kalau script keluar premature (cert error / Ctrl+C), pastikan nginx jalan kembali ===
+NGINX_WAS_STOPPED=0
+cleanup_on_exit() {
+  local exit_code=$?
+  if [ "$NGINX_WAS_STOPPED" = "1" ]; then
+    if ! docker ps --filter name=nginx-proxy --format '{{.Status}}' | grep -q "Up"; then
+      echo -e "${YELLOW}⚠ Script exit (code=$exit_code) — restart nginx supaya server tidak down...${NC}"
+      docker compose -f "$PROJECT_DIR/docker-compose.yml" start nginx >/dev/null 2>&1 || true
+    fi
+  fi
+  exit $exit_code
+}
+trap cleanup_on_exit EXIT INT TERM
+
 if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo -e "${RED}File .env tidak ditemukan.${NC}"
   exit 1
@@ -72,6 +86,7 @@ echo -e "${GREEN}✓ Cloudflare credentials disimpan${NC}"
 
 # Stop nginx sementara
 echo -e "${CYAN}Stop nginx sementara...${NC}"
+NGINX_WAS_STOPPED=1
 docker compose -f "$PROJECT_DIR/docker-compose.yml" stop nginx 2>/dev/null || true
 
 # Minta wildcard certificate
@@ -242,6 +257,7 @@ docker compose -f "$PROJECT_DIR/docker-compose.yml" up -d --build portal
 
 # Start nginx dengan config HTTPS baru
 docker compose -f "$PROJECT_DIR/docker-compose.yml" start nginx
+NGINX_WAS_STOPPED=0  # nginx sudah jalan kembali, trap EXIT tidak perlu restart ulang
 sleep 5
 
 # Setup auto-renew

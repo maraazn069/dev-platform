@@ -208,9 +208,10 @@ router.get('/my/projects', requireAuth, (req, res) => {
   const projects = projectManager.listProjects(username).map(p => ({
     ...p,
     url: `${proto}://${username}.${domain}/?folder=/config/projects/${encodeURIComponent(p.name)}`,
-    // OPSI C: preview URL untuk dev server di port 3000 dalam container.
-    // User jalankan `npm run dev` / `python -m http.server 3000` di project, lalu buka URL ini.
-    previewUrl: `${proto}://${slugify(p.name)}.${username}.${domain}`
+    // Preview URL depth-1 (dipisah '-') supaya cert wildcard apex *.DOMAIN langsung cover.
+    // Format: <project>-<user>.DOMAIN (port 3000 default)
+    //         <project>-<port>-<user>.DOMAIN (custom port, mis. -8000-)
+    previewUrl: `${proto}://${slugify(p.name)}-${username}.${domain}`
   }));
   res.json({
     projects,

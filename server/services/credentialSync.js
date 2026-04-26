@@ -4,7 +4,8 @@ const path = require('path');
 
 const ENV_FILE = '/app/.env';
 const FILEBROWSER_CONTAINER = 'devplatform-filebrowser';
-const FILEBROWSER_IMAGE = 'filebrowser/filebrowser:s6';
+// HARUS match docker-compose.yml. Versi non-s6 (binary di /filebrowser).
+const FILEBROWSER_IMAGE = 'filebrowser/filebrowser:v2.30.0';
 const PGADMIN_CONTAINER = 'devplatform-pgadmin';
 
 // pgAdmin sync auto-disable kalau image punya issue (typer/argparse migration di v9+).

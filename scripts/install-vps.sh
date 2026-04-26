@@ -478,6 +478,23 @@ bash scripts/sync-admin-password.sh || {
   echo -e "${YELLOW}  sudo bash scripts/sync-admin-password.sh${NC}"
 }
 
+# === Auto-aktifkan HTTPS (Let's Encrypt + Cloudflare DNS-01 wildcard) ===
+echo ""
+echo -e "${CYAN}${BOLD}═══ Aktifkan HTTPS otomatis ═══${NC}"
+echo -e "${CYAN}Sekarang akan request cert wildcard *.${DOMAIN} via Cloudflare DNS challenge.${NC}"
+echo -e "${CYAN}Kalau cert lama masih valid, langkah ini di-skip otomatis (no rate-limit).${NC}"
+echo ""
+if bash scripts/setup-https.sh; then
+  HTTPS_OK=1
+  PROTO="https"
+  echo -e "${GREEN}✓ HTTPS aktif — semua URL sekarang pakai https://${NC}"
+else
+  HTTPS_OK=0
+  PROTO="http"
+  echo -e "${YELLOW}⚠ HTTPS gagal di-aktifkan otomatis. Coba manual:${NC}"
+  echo -e "${YELLOW}  sudo bash scripts/setup-https.sh${NC}"
+fi
+
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "IP-VPS-mu")
 
 echo ""
@@ -487,7 +504,7 @@ echo "  ✓ Instalasi berhasil!"
 echo "  ================================================"
 echo -e "${NC}"
 echo -e "${BOLD}Akses Platform:${NC}"
-echo -e "  Via domain  : ${CYAN}http://$DOMAIN${NC}"
+echo -e "  Via domain  : ${CYAN}${PROTO}://$DOMAIN${NC}"
 echo -e "  Via IP      : ${CYAN}http://$SERVER_IP${NC} (redirect ke domain)"
 echo ""
 echo -e "${BOLD}═══ 1 PASSWORD UNTUK SEMUA LOGIN ADMIN ═══${NC}"
@@ -507,13 +524,14 @@ echo -e "  ${GREEN}✓ Ganti password admin di Portal → otomatis ke-sync ke Fi
 echo -e "  ${YELLOW}⚠ MySQL root & PostgreSQL password TIDAK ikut ke-sync (DB password = constant);${NC}"
 echo -e "  ${YELLOW}  set ulang manual lewat 'docker exec' kalau mau ganti.${NC}"
 echo ""
-echo -e "${YELLOW}Langkah selanjutnya (WAJIB):${NC}"
-echo -e "  1. Pastikan DNS ${BOLD}$DOMAIN${NC} → ${BOLD}$SERVER_IP${NC} sudah aktif"
-echo -e "  2. Aktifkan HTTPS  : ${CYAN}sudo bash scripts/setup-https.sh${NC}"
-echo -e "  3. Pasang backup   : ${CYAN}sudo bash scripts/install-backup-cron.sh${NC}  (auto backup harian 02:30)"
-echo -e "  4. Hardening VPS   : ${CYAN}sudo bash scripts/harden-vps.sh${NC}  (sysctl + SSH key-only)"
-echo -e "  5. Tambah user     : ${CYAN}sudo bash scripts/add-user.sh namauser password port${NC}"
-echo -e "  6. Login admin di ${CYAN}https://$DOMAIN${NC} dengan password yang kakak set tadi"
+echo -e "${YELLOW}Langkah selanjutnya:${NC}"
+echo -e "  1. Login admin   : ${CYAN}${PROTO}://$DOMAIN${NC} (password yang kakak set tadi)"
+echo -e "  2. Tambah user di tab 'Users' → portal otomatis buat container code-server + DB"
+echo -e "  3. (opsional) Pasang backup : ${CYAN}sudo bash scripts/install-backup-cron.sh${NC}  (auto backup harian 02:30)"
+echo -e "  4. (opsional) Hardening VPS : ${CYAN}sudo bash scripts/harden-vps.sh${NC}  (sysctl + SSH key-only)"
+if [ "$HTTPS_OK" = "0" ]; then
+  echo -e "  ${YELLOW}5. Aktifkan HTTPS manual : ${CYAN}sudo bash scripts/setup-https.sh${NC}"
+fi
 echo ""
 echo -e "${BOLD}Akses DB Remote (DBeaver/Workbench):${NC}"
 if [ -n "$DB_REMOTE_IPS" ]; then
