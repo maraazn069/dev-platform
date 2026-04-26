@@ -23,7 +23,13 @@ const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-if (!fs.existsSync(USERS_FILE)) {
+let _existingUsers = [];
+if (fs.existsSync(USERS_FILE)) {
+  try { _existingUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8') || '[]'); }
+  catch { _existingUsers = []; }
+}
+const _hasAdmin = Array.isArray(_existingUsers) && _existingUsers.some(u => u && u.role === 'admin');
+if (!fs.existsSync(USERS_FILE) || !_hasAdmin) {
   const bcrypt = require('bcryptjs');
   // Admin password & username di-set dari .env (install-vps.sh nanya manual).
   // Kalau .env tidak ada (mode dev di Replit), pakai default 'admin/admin123'
@@ -33,24 +39,28 @@ if (!fs.existsSync(USERS_FILE)) {
   const adminEmail = process.env.ADMIN_EMAIL || '';
   const adminFromEnv = !!process.env.ADMIN_PASSWORD;
 
-  const defaultUsers = [
-    {
-      id: 'admin-001',
-      username: adminUsername,
-      email: adminEmail,
-      password: bcrypt.hashSync(adminPassword, 10),
-      role: 'admin',
-      displayName: 'Administrator',
-      port: null,
-      projects: [],
-      // Kalau admin set password manual via .env → tidak perlu force-change
-      // Kalau pakai default 'admin123' → wajib ganti
-      mustChangePassword: !adminFromEnv,
-      passwordChangedAt: adminFromEnv ? new Date().toISOString() : undefined,
-      createdAt: new Date().toISOString()
-    }
-  ];
-  fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
+  const adminUser = {
+    id: 'admin-001',
+    username: adminUsername,
+    email: adminEmail,
+    password: bcrypt.hashSync(adminPassword, 10),
+    role: 'admin',
+    displayName: 'Administrator',
+    port: null,
+    projects: [],
+    // Kalau admin set password manual via .env → tidak perlu force-change
+    // Kalau pakai default 'admin123' → wajib ganti
+    mustChangePassword: !adminFromEnv,
+    passwordChangedAt: adminFromEnv ? new Date().toISOString() : undefined,
+    createdAt: new Date().toISOString()
+  };
+  // Preserve user non-admin yang sudah ada (jaga supaya restart self-heal admin
+  // tidak menghapus user lain). Kalau file baru / corrupt → array kosong.
+  const preserved = Array.isArray(_existingUsers)
+    ? _existingUsers.filter(u => u && u.role !== 'admin')
+    : [];
+  const finalUsers = [adminUser, ...preserved];
+  fs.writeFileSync(USERS_FILE, JSON.stringify(finalUsers, null, 2));
   if (adminFromEnv) {
     console.log(`Admin user created: ${adminUsername} (password dari .env, tidak force-change)`);
   } else {

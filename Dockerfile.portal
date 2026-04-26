@@ -5,8 +5,8 @@ RUN apk add --no-cache docker-cli openssl
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY server/ ./server/
 COPY public/ ./public/
