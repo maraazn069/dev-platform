@@ -88,25 +88,22 @@ fi
 
 echo "✓ Cert siap: $CERT_PATH"
 
-# Trigger portal regenerate user conf agar pakai per-user cert
+# Trigger portal regenerate user conf agar pakai per-user cert (preview HTTPS aktif)
 PORTAL_CONTAINER="devplatform-portal"
 if docker ps --format '{{.Names}}' | grep -q "^${PORTAL_CONTAINER}$"; then
-  echo "→ Trigger portal regenerate ${USERNAME}.conf..."
-  # Endpoint internal (admin) dipanggil via curl di dalam container portal sendiri.
-  # Lebih simpel: nyalakan ulang nginx — file user.conf akan di-regenerate next time
-  # provisionUser jalan ATAU admin click Repair Container.
-  # Untuk apply sekarang, kita reload nginx (file lama akan tetap pakai wildcard cert
-  # sampai admin click Repair Container atau restart portal).
+  echo "→ Regenerate ${USERNAME}.conf via portal (pakai cert per-user baru)..."
+  docker exec "$PORTAL_CONTAINER" node -e "
+    const ngx = require('/app/server/services/nginxManager');
+    const r = ngx.ensureUserConfig('${USERNAME}');
+    console.log(r.success ? '  ✓ ' + r.message : '  ✗ ' + r.message);
+    process.exit(r.success ? 0 : 1);
+  " || echo "  ⚠ regenerate gagal — fallback reload nginx"
   docker exec nginx-proxy nginx -s reload 2>/dev/null || \
     docker restart nginx-proxy >/dev/null 2>&1 || true
-  echo "  ✓ nginx di-reload"
 fi
 
 echo ""
-echo "✅ Done. Sekarang user '${USERNAME}' bisa preview project di:"
-echo "   https://<project>.${CERT_NAME}"
-echo ""
-echo "Catatan:"
-echo "  - Login admin → tombol 🔧 Repair Container untuk regenerate user nginx conf"
-echo "    (biar nginx pakai cert per-user yg baru, bukan wildcard)."
-echo "  - Atau restart portal: docker compose restart portal"
+echo "✅ Done. User '${USERNAME}' sekarang punya:"
+echo "   https://${CERT_NAME}/                       (code-server UI, HTTPS)"
+echo "   https://<project>.${CERT_NAME}              (preview project, HTTPS)"
+echo "   https://<project>-<port>.${CERT_NAME}       (preview port custom)"
