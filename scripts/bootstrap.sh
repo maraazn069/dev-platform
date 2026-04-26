@@ -70,12 +70,33 @@ echo ""
 
 # === [2/3] Clone repo atau pull update ===
 if [ -d "$INSTALL_DIR/.git" ]; then
-  echo -e "${CYAN}→ Repo sudah ada di $INSTALL_DIR — pull update...${NC}"
+  echo -e "${CYAN}→ Repo sudah ada di $INSTALL_DIR — sync dari GitHub...${NC}"
   git -C "$INSTALL_DIR" fetch origin "$BRANCH" --quiet
-  git -C "$INSTALL_DIR" checkout "$BRANCH" --quiet
-  if ! git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" 2>&1 | tail -3; then
-    echo -e "${YELLOW}  ⚠ git pull gagal (mungkin ada perubahan lokal). Lanjut pakai versi yang ada.${NC}"
+
+  # Detect local changes (modified/staged files)
+  if ! git -C "$INSTALL_DIR" diff-index --quiet HEAD -- 2>/dev/null; then
+    if [ "$REINSTALL" = "1" ]; then
+      # --reinstall = user explicit mau fresh, auto-stash dengan tag timestamp + hard reset
+      STASH_TAG="bootstrap-autostash-$(date +%Y%m%d-%H%M%S)"
+      echo -e "${YELLOW}  ⚠ Ada perubahan lokal — auto-stash sebagai '$STASH_TAG' (--reinstall flag)${NC}"
+      git -C "$INSTALL_DIR" stash push -u -m "$STASH_TAG" --quiet 2>&1 | tail -3 || true
+      echo -e "${CYAN}     (kalau perlu recover: cd $INSTALL_DIR && git stash list | grep $STASH_TAG)${NC}"
+    else
+      echo -e "${RED}  ✗ Ada perubahan lokal yang belum di-commit di $INSTALL_DIR:${NC}"
+      git -C "$INSTALL_DIR" status --short | head -10 | sed 's/^/      /'
+      echo -e "${YELLOW}  Pilihan:${NC}"
+      echo -e "${CYAN}    a) Discard semua perubahan lokal & pakai versi GitHub:${NC}"
+      echo -e "${CYAN}       jalankan ulang dengan --reinstall flag${NC}"
+      echo -e "${CYAN}    b) Stash manual lalu coba lagi:${NC}"
+      echo -e "${CYAN}       cd $INSTALL_DIR && sudo git stash && [perintah ini lagi]${NC}"
+      exit 1
+    fi
   fi
+
+  git -C "$INSTALL_DIR" checkout "$BRANCH" --quiet 2>/dev/null || \
+    git -C "$INSTALL_DIR" checkout -B "$BRANCH" "origin/$BRANCH" --quiet
+  git -C "$INSTALL_DIR" reset --hard "origin/$BRANCH" --quiet
+  echo -e "${GREEN}  ✓ Hard-reset ke origin/$BRANCH${NC}"
 elif [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
   echo -e "${RED}✗ $INSTALL_DIR sudah ada tapi BUKAN git repo (ada file lain).${NC}"
   echo -e "${YELLOW}  Pindahkan/hapus folder ini dulu, atau set INSTALL_DIR ke path lain:${NC}"

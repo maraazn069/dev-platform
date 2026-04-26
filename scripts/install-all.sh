@@ -41,10 +41,17 @@ if [ -d "$PROJECT_DIR/.git" ] && command -v git >/dev/null 2>&1 && [ "${INSTALL_
   HASH_BEFORE=$(sha256sum "$SCRIPT_DIR/install-all.sh" 2>/dev/null | awk '{print $1}')
 
   echo -e "${CYAN}→ Pull update terbaru dari GitHub...${NC}"
-  if git -C "$PROJECT_DIR" pull --ff-only origin main 2>&1 | tail -3; then
+  # Detect uncommitted local changes — kalau ada, tampilkan warning + skip pull
+  # (jangan auto-overwrite di flow normal install-all; user bisa pakai bootstrap --reinstall untuk wipe)
+  if ! git -C "$PROJECT_DIR" diff-index --quiet HEAD -- 2>/dev/null; then
+    echo -e "${YELLOW}  ⚠ Ada perubahan lokal yang belum di-commit:${NC}"
+    git -C "$PROJECT_DIR" status --short | head -5 | sed 's/^/      /'
+    echo -e "${YELLOW}  Skip git pull. Untuk wipe & reinstall fresh, pakai:${NC}"
+    echo -e "${CYAN}      curl -fsSL https://raw.githubusercontent.com/maraazn069/dev-platform/main/scripts/bootstrap.sh | sudo bash -s -- --reinstall${NC}"
+  elif git -C "$PROJECT_DIR" pull --ff-only origin main 2>&1 | tail -3; then
     echo -e "${GREEN}  ✓ Repo up-to-date${NC}"
   else
-    echo -e "${YELLOW}  ⚠ git pull gagal (mungkin ada konflik lokal). Lanjut pakai versi lokal.${NC}"
+    echo -e "${YELLOW}  ⚠ git pull gagal. Lanjut pakai versi lokal.${NC}"
   fi
   echo ""
 
