@@ -35,6 +35,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
+# === Auto pull dari GitHub supaya selalu pakai versi terbaru ===
+# Anti-loop guard: hanya boleh re-exec sekali walau ada kondisi edge.
+if [ -d "$PROJECT_DIR/.git" ] && command -v git >/dev/null 2>&1 && [ "${INSTALL_ALL_REEXEC:-0}" != "1" ]; then
+  HASH_BEFORE=$(sha256sum "$SCRIPT_DIR/install-all.sh" 2>/dev/null | awk '{print $1}')
+
+  echo -e "${CYAN}→ Pull update terbaru dari GitHub...${NC}"
+  if git -C "$PROJECT_DIR" pull --ff-only origin main 2>&1 | tail -3; then
+    echo -e "${GREEN}  ✓ Repo up-to-date${NC}"
+  else
+    echo -e "${YELLOW}  ⚠ git pull gagal (mungkin ada konflik lokal). Lanjut pakai versi lokal.${NC}"
+  fi
+  echo ""
+
+  HASH_AFTER=$(sha256sum "$SCRIPT_DIR/install-all.sh" 2>/dev/null | awk '{print $1}')
+  if [ -n "$HASH_BEFORE" ] && [ -n "$HASH_AFTER" ] && [ "$HASH_BEFORE" != "$HASH_AFTER" ]; then
+    echo -e "${YELLOW}→ install-all.sh ter-update setelah git pull — re-exec versi terbaru...${NC}"
+    export INSTALL_ALL_REEXEC=1
+    exec bash "$SCRIPT_DIR/install-all.sh" "$@"
+  fi
+fi
+
 echo -e "${BOLD}${CYAN}"
 cat << 'BANNER'
   ╔══════════════════════════════════════════════════╗
