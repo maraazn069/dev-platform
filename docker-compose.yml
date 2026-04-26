@@ -50,6 +50,9 @@ services:
       # Cloudflare API token (read-only) untuk auto-DNS subdomain per user.
       # File ini di-create oleh setup-https.sh. Mount as :ro biar gak bisa di-modif.
       - /etc/cloudflare:/etc/cloudflare:ro
+      # Letsencrypt certs (read-only) — portal cek apakah cert *.<user>.<domain> ada
+      # untuk decide pakai per-user cert atau wildcard apex di nginx user.conf.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/devplatform/data:/opt/devplatform/data
       - /opt/devplatform/backups:/opt/devplatform/backups
