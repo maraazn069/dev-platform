@@ -237,9 +237,10 @@ router.patch('/my/projects/:name', requireAuth, (req, res) => {
 
 router.delete('/my/projects/:name', requireAuth, (req, res) => {
   const { name } = req.params;
-  const { confirm } = req.body || {};
+  // Terima confirm dari body (POST-style) atau query string (DELETE-friendly).
+  const confirm = (req.body && req.body.confirm) || (req.query && req.query.confirm);
   if (confirm !== name) {
-    return res.json({ success: false, message: `Konfirmasi: kirim body { "confirm": "${name}" } yang sama dengan nama project.` });
+    return res.json({ success: false, message: `Konfirmasi: kirim ?confirm=${name} di URL atau body { "confirm": "${name}" }.` });
   }
   const username = req.session.user.username;
   const result = projectManager.softDeleteProject(username, name);
